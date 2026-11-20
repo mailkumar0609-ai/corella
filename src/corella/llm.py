@@ -116,16 +116,17 @@ class AnthropicLLM(_HttpLLM):
                 "input_schema": {"type": "object", "properties": {"data": {"description": "The full JSON answer"}},
                                  "required": ["data"]}}
         out = self._post({"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01"},
-                         {"model": self.model, "max_tokens": max_tokens + 500, "system": system,
+                         {"model": self.model, "max_tokens": max_tokens + 500,
+                          "system": system + "\nAlways answer by calling the `respond` tool with the JSON in `data`.",
                           "messages": [{"role": "user", "content": prompt}],
-                          "tools": [tool], "tool_choice": {"type": "tool", "name": "respond"}})
+                          "tools": [tool], "tool_choice": {"type": "auto"}})
         u = out.get("usage", {})
         self._track(u.get("input_tokens", 0), u.get("output_tokens", 0))
         for b in out["content"]:
             if b.get("type") == "tool_use":
                 data = b["input"].get("data", b["input"])
                 return parse_json(data) if isinstance(data, str) else data
-        raise LLMError("anthropic returned no JSON tool output")
+        return parse_json("".join(b.get("text", "") for b in out["content"]))  # model answered in plain text
 
 
 class OpenAILLM(_HttpLLM):
