@@ -109,7 +109,7 @@ def generate_scenarios(llm: LLM, agent_description: str, n: int = 10, personas: 
               '{"scenarios":[{"id":"snake_case","goal":"...","persona":"<persona id>",'
               '"opening":"first customer message, in the persona\'s language","success":"what correct agent behaviour looks like"}]}')
     data = llm.complete_json(SCENARIO_SYS + " You generate test scenarios.", prompt, 3000)
-    return [Scenario(**{k: s[k] for k in ("id", "goal", "persona", "opening", "success")}) for s in data["scenarios"]][:n]
+    return [Scenario(**{k: s[k] for k in ("id", "goal", "persona", "opening", "success")}) for s in (data if isinstance(data, list) else data["scenarios"])][:n]
 
 
 def simulate(llm: LLM, target: Target, sc: Scenario, max_turns: int = 6) -> list[dict]:

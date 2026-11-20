@@ -54,3 +54,11 @@ def test_complete_json_repairs_broken_output():
             return '{"a": "say "hi""}' if self.n == 1 else '{"a": "say \\"hi\\""}'
 
     assert Flaky().complete_json("s", "p") == {"a": 'say "hi"'}
+
+
+def test_list_from_accepts_any_wrapping():
+    from corella.agentic import _list_from
+    assert _list_from({"root_causes": [1]}, "root_causes") == [1]
+    assert _list_from([2], "root_causes") == [2]
+    assert _list_from({"causes": [3]}, "root_causes") == [3]
+    assert _list_from({}, "root_causes") == []
