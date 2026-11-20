@@ -1,0 +1,14 @@
+{
+  "agent_name": "My support agent",
+  "agent_description": "Describe what the agent does, who it talks to, and in which languages.",
+  "rules": "List the business rules the agent must never break.",
+  "target": {
+    "type": "http",
+    "url": "https://your-agent.example.com/chat",
+    "headers": {"authorization": "Bearer YOUR_TOKEN"},
+    "reply_field": "reply"
+  },
+  "scenarios": 20,
+  "max_turns": 6,
+  "workers": 4
+}
