@@ -113,7 +113,9 @@ class AnthropicLLM(_HttpLLM):
     def complete_json(self, system, prompt, max_tokens=1500):
         """Forced tool call: the API returns parsed JSON, so quotes inside Hindi/Hinglish text can't break it."""
         tool = {"name": "respond", "description": "Return the requested JSON answer in `data`.",
-                "input_schema": {"type": "object", "properties": {"data": {"description": "The full JSON answer"}},
+                "input_schema": {"type": "object", "properties": {"data": {
+                    "type": ["object", "array"],
+                    "description": "The full answer as a JSON object or array (not a string)"}},
                                  "required": ["data"]}}
         out = self._post({"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01"},
                          {"model": self.model, "max_tokens": max_tokens + 500,
@@ -125,8 +127,10 @@ class AnthropicLLM(_HttpLLM):
         for b in out["content"]:
             if b.get("type") == "tool_use":
                 data = b["input"].get("data", b["input"])
-                return parse_json(data) if isinstance(data, str) else data
-        return parse_json("".join(b.get("text", "") for b in out["content"]))  # model answered in plain text
+                if not isinstance(data, str):
+                    return data
+                break
+        return super().complete_json(system, prompt, max_tokens)  # fallback: plain text with one repair retry
 
 
 class OpenAILLM(_HttpLLM):
