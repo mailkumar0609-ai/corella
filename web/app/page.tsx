@@ -4,7 +4,7 @@ import { PLANS } from "@/lib/plans";
 const FAILS = [
   ["Code-mixing", "“Mera EMI kal debit hoga kya?” switches language mid-sentence. Many agents answer the wrong question."],
   ["Indian numbers and dates", "“Dedh lakh”, “saade teen baje”, “10 tareekh”: misread amounts become wrong promises."],
-  ["Accents and dialects", "Bhojpuri-accented Hindi, Tamil-English, Bengali-Hindi: real callers don't sound like the demo."],
+  ["Accents and dialects", "Bhojpuri-tinged Hindi, Tenglish, Manglish, Gujarati-Hindi: real customers don't sound like the demo."],
   ["Compliance traps", "“Manager ne bola tha fee maaf hogi.” One agreeable reply can create a liability for a lender."],
   ["Privacy pressure", "Callers asking for a spouse's or brother's account details, and pushing when refused."],
   ["Confused and angry customers", "Vague one-word replies, interruptions, ALL CAPS. Does the agent stay calm and on task?"],
@@ -18,7 +18,7 @@ const STEPS = [
 ];
 
 const COMPARE = [
-  ["Personas built for Indian callers (Hindi, Hinglish, regional)", true, false],
+  ["13 Indian languages and code-mixed speech (Hindi, Hinglish, Tamil, Telugu, Bengali…)", true, false],
   ["Indian number, date and currency formats tested", true, false],
   ["BFSI compliance checks (lending, collections, insurance)", true, "Generic"],
   ["Rupee pricing, GST invoices, UPI payments", true, false],
@@ -41,7 +41,7 @@ export default function Home() {
         <span className="badge">For teams shipping voice and chat agents in India</span>
         <h1 style={{ fontSize: "clamp(34px,6vw,54px)", margin: "16px 0" }}>Test your AI agent before your customers do.</h1>
         <p style={{ fontSize: 19 }} className="muted">
-          Corella sends hundreds of simulated Indian customers at your agent, speaking Hindi, Hinglish and regional accents,
+          Corella sends hundreds of simulated Indian customers at your agent, speaking 13 Indian languages, from Hindi and Hinglish to Tamil, Telugu, Bengali and Gujarati,
           and shows you every conversation that went wrong, the exact turn it failed, and how to fix the prompt.
         </p>
         <div className="row" style={{ marginTop: 22 }}>

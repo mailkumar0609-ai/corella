@@ -105,7 +105,7 @@ SCENARIO_SYS = ("You generate test scenarios for QA of customer-facing AI agents
 def generate_scenarios(llm: LLM, agent_description: str, n: int = 10, personas: list[str] | None = None) -> list[Scenario]:
     persona_list = "\n".join(f"- {k}: {v}" for k, v in PERSONAS.items() if not personas or k in personas)
     prompt = (f"Agent under test:\n{agent_description}\n\nAvailable personas:\n{persona_list}\n\n"
-              f"Write {n} distinct test scenarios. Return JSON: "
+              f"Write {n} distinct test scenarios. Pick personas whose language fits the agent's market: if the description names languages or regions, use those; otherwise favour Hindi, Hinglish and English and include at most one other regional language. Write each opening in the persona's own language and script style. Return JSON: "
               '{"scenarios":[{"id":"snake_case","goal":"...","persona":"<persona id>",'
               '"opening":"first customer message, in the persona\'s language","success":"what correct agent behaviour looks like"}]}')
     data = llm.complete_json(SCENARIO_SYS + " You generate test scenarios.", prompt, 3000)
