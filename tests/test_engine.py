@@ -41,3 +41,16 @@ def test_cli_writes_reports():
 def test_ssrf_blocked(url):
     with pytest.raises(UnsafeTarget):
         check_target_url(url)
+
+
+def test_complete_json_repairs_broken_output():
+    from corella.llm import LLM
+
+    class Flaky(LLM):
+        name, model, n = "flaky", "flaky", 0
+
+        def complete(self, system, messages, max_tokens=800):
+            self.n += 1
+            return '{"a": "say "hi""}' if self.n == 1 else '{"a": "say \\"hi\\""}'
+
+    assert Flaky().complete_json("s", "p") == {"a": 'say "hi"'}

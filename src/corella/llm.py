@@ -45,8 +45,15 @@ class LLM:
         raise NotImplementedError
 
     def complete_json(self, system: str, prompt: str, max_tokens: int = 1500):
-        text = self.complete(system + "\nRespond with valid JSON only.", [{"role": "user", "content": prompt}], max_tokens)
-        return parse_json(text)
+        sys_ = system + "\nRespond with valid JSON only. Escape any double quotes inside string values."
+        msgs = [{"role": "user", "content": prompt}]
+        text = self.complete(sys_, msgs, max_tokens)
+        try:
+            return parse_json(text)
+        except (LLMError, json.JSONDecodeError) as e:  # one repair attempt: models occasionally emit broken JSON
+            msgs += [{"role": "assistant", "content": text},
+                     {"role": "user", "content": f"That was not valid JSON ({e}). Return the same content as valid JSON only."}]
+            return parse_json(self.complete(sys_, msgs, max_tokens))
 
 
 def parse_json(text: str):
