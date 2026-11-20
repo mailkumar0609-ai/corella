@@ -1,7 +1,7 @@
-"""Corella public REST API (v1). Auth: `Authorization: Bearer crl_live_...`.
+"""Corella public REST API (v1).
 
-Run locally:  uvicorn corella.api:app --reload
-Docs:         /docs (OpenAPI)
+Auth: `Authorization: Bearer <API key crl_live_... | Supabase access token>`; dashboard users may pass X-Org-Id.
+Run locally:  uvicorn corella.api:app --reload      Docs: /docs
 """
 from __future__ import annotations
 
@@ -9,16 +9,18 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import __version__, services
+from . import __version__, billing, services
+from .auth import Ctx, current_ctx, current_user, get_db, require_owner
 from .config import PLANS, settings
-from .models import Agent, Organization, Result, Run, SessionLocal, init_db
+from .models import Agent, ApiKey, Membership, Organization, Result, Run, User, init_db
+from .personas import PERSONAS
 from .report import render_html
 from .security import UnsafeTarget, check_target_url
 
@@ -34,23 +36,8 @@ async def lifespan(_app):
 app = FastAPI(title="Corella API", version=__version__, lifespan=lifespan,
               description="Automated testing for Indian-language voice and chat AI agents.")
 if settings.cors_origins:
-    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def current_org(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> Organization:
-    token = authorization.removeprefix("Bearer ").strip()
-    org = services.authenticate(db, token) if token else None
-    if not org:
-        raise HTTPException(401, "Invalid or missing API key")
-    return org
+    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],
+                       allow_headers=["authorization", "content-type", "x-org-id"])
 
 
 # ---------- schemas ----------
@@ -60,7 +47,7 @@ class TargetSpec(BaseModel):
     url: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)
     reply_field: str = "reply"
-    system_prompt: str | None = None
+    system_prompt: str | None = Field(default=None, max_length=50_000)
 
 
 class AgentIn(BaseModel):
@@ -76,10 +63,11 @@ class AgentOut(BaseModel):
     description: str
     rules: str
     target_type: str
+    target_url: str | None = None
 
 
 class ScenarioIn(BaseModel):
-    id: str
+    id: str = Field(max_length=100)
     goal: str
     persona: str
     opening: str
@@ -90,7 +78,7 @@ class RunIn(BaseModel):
     scenarios: int | list[ScenarioIn] = 10
     personas: list[str] | None = None
     max_turns: int = Field(default=6, ge=1, le=20)
-    label: str | None = None
+    label: str | None = Field(default=None, max_length=200)
 
     @field_validator("scenarios")
     @classmethod
@@ -101,14 +89,32 @@ class RunIn(BaseModel):
         return v
 
 
+class OnboardIn(BaseModel):
+    company: str = Field(min_length=1, max_length=200)
+
+
+class KeyIn(BaseModel):
+    name: str = Field(default="default", max_length=100)
+
+
+class WebhookIn(BaseModel):
+    url: str | None = None
+
+
+class CheckoutIn(BaseModel):
+    plan: Literal["starter", "growth"]
+
+
 def agent_out(a: Agent) -> AgentOut:  # never echo stored headers (they may hold the customer's secrets)
-    return AgentOut(id=a.id, name=a.name, description=a.description, rules=a.rules, target_type=a.target["type"])
+    return AgentOut(id=a.id, name=a.name, description=a.description, rules=a.rules,
+                    target_type=a.target["type"], target_url=a.target.get("url"))
 
 
 def run_out(r: Run) -> dict:
     return {"id": r.id, "agent_id": r.agent_id, "status": r.status, "label": (r.config or {}).get("label"),
             "summary": r.summary, "conversations": r.conversations, "error": r.error,
-            "created_at": r.created_at, "started_at": r.started_at, "finished_at": r.finished_at}
+            "baseline_run_id": r.baseline_run_id, "created_at": r.created_at,
+            "started_at": r.started_at, "finished_at": r.finished_at}
 
 
 def own(db: Session, model, id_: str, org: Organization):
@@ -118,21 +124,89 @@ def own(db: Session, model, id_: str, org: Organization):
     return obj
 
 
-# ---------- endpoints ----------
+def quota_or_402(fn, *args):
+    try:
+        fn(*args)
+    except services.QuotaExceeded as e:
+        raise HTTPException(402, str(e))
+
+
+# ---------- public ----------
 
 @app.get("/healthz")
 def health():
     return {"ok": True, "version": __version__}
 
 
-@app.get("/v1/me")
-def me(org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    return {"organization": {"id": org.id, "name": org.name, "plan": org.plan}, "limits": PLANS[org.plan],
-            "conversations_this_month": services.conversations_this_month(db, org.id)}
+@app.get("/v1/plans")
+def plans():
+    return PLANS
 
+
+@app.get("/v1/personas")
+def personas():
+    return [{"id": k, "description": v} for k, v in PERSONAS.items()]
+
+
+# ---------- account ----------
+
+@app.post("/v1/onboarding", status_code=201)
+def onboard(body: OnboardIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """First sign-in: create the user's workspace on the free trial."""
+    if db.scalar(select(Membership).where(Membership.user_id == user.id)):
+        raise HTTPException(409, "You already have a workspace")
+    org, _ = services.create_organization(db, body.company, "trial", owner=user)
+    return {"organization": {"id": org.id, "name": org.name, "plan": org.plan}}
+
+
+@app.get("/v1/me")
+def me(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    org = ctx.org
+    return {"organization": {"id": org.id, "name": org.name, "plan": org.plan,
+                             "subscription_status": org.subscription_status, "webhook_url": org.webhook_url},
+            "user": {"id": ctx.user.id, "email": ctx.user.email, "role": ctx.role} if ctx.user else None,
+            "limits": PLANS[org.plan], "conversations_this_month": services.conversations_this_month(db, org.id)}
+
+
+@app.get("/v1/api-keys")
+def list_keys(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    keys = db.scalars(select(ApiKey).where(ApiKey.organization_id == ctx.org.id).order_by(ApiKey.created_at))
+    return [{"id": k.id, "name": k.name, "prefix": k.prefix, "revoked": k.revoked,
+             "created_at": k.created_at, "last_used_at": k.last_used_at} for k in keys]
+
+
+@app.post("/v1/api-keys", status_code=201)
+def new_key(body: KeyIn, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)):
+    raw = services.create_api_key(db, ctx.org.id, body.name)
+    db.commit()
+    return {"key": raw, "note": "Copy this key now; it will not be shown again."}
+
+
+@app.delete("/v1/api-keys/{key_id}", status_code=204)
+def revoke_key(key_id: str, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)):
+    own(db, ApiKey, key_id, ctx.org).revoked = True
+    db.commit()
+
+
+@app.put("/v1/settings/webhook")
+def set_webhook(body: WebhookIn, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)):
+    if body.url:
+        if not PLANS[ctx.org.plan]["webhooks"]:
+            raise HTTPException(402, "Webhooks are available on the Growth plan and above")
+        try:
+            check_target_url(body.url, settings.allow_private_targets)
+        except UnsafeTarget as e:
+            raise HTTPException(422, str(e))
+    ctx.org.webhook_url = body.url or None
+    db.commit()
+    return {"webhook_url": ctx.org.webhook_url, "signing_secret": ctx.org.webhook_secret,
+            "note": "Verify the x-corella-signature header: hex HMAC-SHA256 of the raw body with this secret."}
+
+
+# ---------- agents ----------
 
 @app.post("/v1/agents", response_model=AgentOut, status_code=201)
-def create_agent(body: AgentIn, org: Organization = Depends(current_org), db: Session = Depends(get_db)):
+def create_agent(body: AgentIn, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
     t = body.target
     if t.type == "http":
         if not t.url:
@@ -143,11 +217,8 @@ def create_agent(body: AgentIn, org: Organization = Depends(current_org), db: Se
             raise HTTPException(422, str(e))
     if t.type == "prompt" and not t.system_prompt:
         raise HTTPException(422, "target.system_prompt is required for prompt targets")
-    try:
-        services.check_agent_limit(db, org)
-    except services.QuotaExceeded as e:
-        raise HTTPException(402, str(e))
-    a = Agent(organization_id=org.id, name=body.name, description=body.description, rules=body.rules,
+    quota_or_402(services.check_agent_limit, db, ctx.org)
+    a = Agent(organization_id=ctx.org.id, name=body.name, description=body.description, rules=body.rules,
               target=t.model_dump(exclude_none=True))
     db.add(a)
     db.commit()
@@ -155,29 +226,51 @@ def create_agent(body: AgentIn, org: Organization = Depends(current_org), db: Se
 
 
 @app.get("/v1/agents", response_model=list[AgentOut])
-def list_agents(org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    return [agent_out(a) for a in db.scalars(select(Agent).where(Agent.organization_id == org.id).order_by(Agent.created_at))]
+def list_agents(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    return [agent_out(a) for a in db.scalars(select(Agent).where(Agent.organization_id == ctx.org.id).order_by(Agent.created_at))]
+
+
+@app.get("/v1/agents/{agent_id}", response_model=AgentOut)
+def get_agent(agent_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    return agent_out(own(db, Agent, agent_id, ctx.org))
 
 
 @app.delete("/v1/agents/{agent_id}", status_code=204)
-def delete_agent(agent_id: str, org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    a = own(db, Agent, agent_id, org)
+def delete_agent(agent_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    a = own(db, Agent, agent_id, ctx.org)
     if db.scalar(select(Run.id).where(Run.agent_id == a.id).limit(1)):
         raise HTTPException(409, "Agent has runs; it cannot be deleted")
     db.delete(a)
     db.commit()
 
 
+# ---------- runs ----------
+
 @app.post("/v1/agents/{agent_id}/runs", status_code=202)
-def create_run(agent_id: str, body: RunIn, org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    agent = own(db, Agent, agent_id, org)
+def create_run(agent_id: str, body: RunIn, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    agent = own(db, Agent, agent_id, ctx.org)
     cfg = body.model_dump(exclude_none=True)
     n = services.requested_count(cfg)
-    try:
-        services.check_quota(db, org, n)
-    except services.QuotaExceeded as e:
-        raise HTTPException(402, str(e))
-    run = Run(organization_id=org.id, agent_id=agent.id, config=cfg, conversations=n)  # reserve quota now
+    quota_or_402(services.check_quota, db, ctx.org, n)
+    run = Run(organization_id=ctx.org.id, agent_id=agent.id, config=cfg, conversations=n)  # reserve quota now
+    db.add(run)
+    db.commit()
+    return run_out(run)
+
+
+@app.post("/v1/runs/{run_id}/rerun", status_code=202)
+def rerun(run_id: str, label: str | None = None, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    """Regression test: replay the exact scenarios of a finished run (e.g. after a prompt change) and compare."""
+    if not PLANS[ctx.org.plan]["regression"]:
+        raise HTTPException(402, "Regression testing is available on paid plans")
+    base = own(db, Run, run_id, ctx.org)
+    if base.status != "completed":
+        raise HTTPException(409, "Only completed runs can be re-run")
+    scenarios = [r.scenario for r in base.results]
+    quota_or_402(services.check_quota, db, ctx.org, len(scenarios))
+    cfg = {**base.config, "scenarios": scenarios, "label": label or f"Re-run of {base.id}"}
+    run = Run(organization_id=ctx.org.id, agent_id=base.agent_id, config=cfg,
+              conversations=len(scenarios), baseline_run_id=base.id)
     db.add(run)
     db.commit()
     return run_out(run)
@@ -185,21 +278,33 @@ def create_run(agent_id: str, body: RunIn, org: Organization = Depends(current_o
 
 @app.get("/v1/runs")
 def list_runs(agent_id: str | None = None, limit: int = Query(20, le=100),
-              org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    q = select(Run).where(Run.organization_id == org.id).order_by(Run.created_at.desc()).limit(limit)
+              ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    q = select(Run).where(Run.organization_id == ctx.org.id).order_by(Run.created_at.desc()).limit(limit)
     if agent_id:
         q = q.where(Run.agent_id == agent_id)
     return [run_out(r) for r in db.scalars(q)]
 
 
 @app.get("/v1/runs/{run_id}")
-def get_run(run_id: str, org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    return run_out(own(db, Run, run_id, org))
+def get_run(run_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    return run_out(own(db, Run, run_id, ctx.org))
+
+
+@app.get("/v1/runs/{run_id}/compare")
+def compare(run_id: str, baseline: str | None = None, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    run = own(db, Run, run_id, ctx.org)
+    base_id = baseline or run.baseline_run_id
+    if not base_id:
+        raise HTTPException(422, "No baseline run given")
+    base = own(db, Run, base_id, ctx.org)
+    if run.status != "completed" or base.status != "completed":
+        raise HTTPException(409, "Both runs must be completed")
+    return services.compare_runs(db, run, base)
 
 
 @app.get("/v1/runs/{run_id}/results")
-def get_results(run_id: str, failed_only: bool = False, org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    run = own(db, Run, run_id, org)
+def get_results(run_id: str, failed_only: bool = False, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    run = own(db, Run, run_id, ctx.org)
     q = select(Result).where(Result.run_id == run.id)
     if failed_only:
         q = q.where(Result.passed.is_(False))
@@ -208,9 +313,37 @@ def get_results(run_id: str, failed_only: bool = False, org: Organization = Depe
 
 
 @app.get("/v1/runs/{run_id}/report", response_class=HTMLResponse)
-def get_report(run_id: str, org: Organization = Depends(current_org), db: Session = Depends(get_db)):
-    run = own(db, Run, run_id, org)
+def get_report(run_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    run = own(db, Run, run_id, ctx.org)
     if run.status != "completed":
         raise HTTPException(409, f"Run is {run.status}")
     agent = db.get(Agent, run.agent_id)
     return render_html(services.run_results_as_engine(run), {"agent": agent.name, "llm": (run.usage or {}).get("model", "")})
+
+
+# ---------- billing ----------
+
+@app.post("/v1/billing/checkout")
+def checkout(body: CheckoutIn, ctx: Ctx = Depends(require_owner)):
+    try:
+        return billing.create_subscription(ctx.org, body.plan, ctx.user.email if ctx.user else None)
+    except billing.BillingError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/v1/billing/cancel")
+def cancel(ctx: Ctx = Depends(require_owner)):
+    try:
+        billing.cancel_subscription(ctx.org)
+    except billing.BillingError as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True, "note": "Your plan stays active until the end of the current billing period."}
+
+
+@app.post("/webhooks/razorpay")
+async def razorpay_webhook(request: Request, x_razorpay_signature: str = Header(default=""),
+                           db: Session = Depends(get_db)):
+    raw = await request.body()
+    if not billing.verify_signature(raw, x_razorpay_signature):
+        raise HTTPException(400, "Invalid signature")
+    return {"result": billing.handle_event(db, await request.json())}

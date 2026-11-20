@@ -23,15 +23,23 @@ class Settings:
     # Blocks tests against private/internal addresses (SSRF protection). Disable only for local development.
     allow_private_targets: bool = field(default_factory=lambda: _env("CORELLA_ALLOW_PRIVATE_TARGETS", "false").lower() == "true")
     max_scenarios_per_run: int = field(default_factory=lambda: int(_env("CORELLA_MAX_SCENARIOS", "200")))
+    supabase_url: str = field(default_factory=lambda: _env("SUPABASE_URL").rstrip("/"))
+    supabase_anon_key: str = field(default_factory=lambda: _env("SUPABASE_ANON_KEY"))
+    razorpay_key_id: str = field(default_factory=lambda: _env("RAZORPAY_KEY_ID"))
+    razorpay_key_secret: str = field(default_factory=lambda: _env("RAZORPAY_KEY_SECRET"))
+    razorpay_webhook_secret: str = field(default_factory=lambda: _env("RAZORPAY_WEBHOOK_SECRET"))
+    # Razorpay plan ids (create these once in the Razorpay dashboard), e.g. RAZORPAY_PLAN_GROWTH=plan_xxx
+    razorpay_plans: dict = field(default_factory=lambda: {p: _env(f"RAZORPAY_PLAN_{p.upper()}") for p in ("starter", "growth")})
+    app_url: str = field(default_factory=lambda: _env("CORELLA_APP_URL", "http://localhost:3000"))
     cors_origins: list[str] = field(default_factory=lambda: [o for o in _env("CORELLA_CORS_ORIGINS", "").split(",") if o])
 
 
 settings = Settings()
 
-# Plans: monthly simulated-conversation quota. Prices live in billing, not here.
+# Plans. price_inr is the monthly list price (GST extra); enterprise is quoted per customer.
 PLANS = {
-    "trial": {"monthly_conversations": 100, "max_agents": 1},
-    "starter": {"monthly_conversations": 1_000, "max_agents": 1},
-    "growth": {"monthly_conversations": 10_000, "max_agents": 5},
-    "enterprise": {"monthly_conversations": 1_000_000, "max_agents": 1_000},
+    "trial": {"monthly_conversations": 100, "max_agents": 1, "price_inr": 0, "regression": False, "webhooks": False},
+    "starter": {"monthly_conversations": 1_000, "max_agents": 1, "price_inr": 4_999, "regression": True, "webhooks": False},
+    "growth": {"monthly_conversations": 10_000, "max_agents": 5, "price_inr": 24_999, "regression": True, "webhooks": True},
+    "enterprise": {"monthly_conversations": 1_000_000, "max_agents": 1_000, "price_inr": None, "regression": True, "webhooks": True},
 }

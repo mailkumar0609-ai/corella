@@ -1,15 +1,9 @@
 """End-to-end API tests on a temporary SQLite database with the offline mock LLM."""
-import os
-import tempfile
+from fastapi.testclient import TestClient
 
-os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
-os.environ["CORELLA_LLM"] = "mock"
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-from corella import services, worker  # noqa: E402
-from corella.api import app  # noqa: E402
-from corella.models import SessionLocal, init_db  # noqa: E402
+from corella import services, worker
+from corella.api import app
+from corella.models import SessionLocal, init_db
 
 init_db()
 client = TestClient(app)

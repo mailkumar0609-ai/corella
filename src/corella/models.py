@@ -27,6 +27,28 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id("org"))
     name: Mapped[str] = mapped_column(String(200))
     plan: Mapped[str] = mapped_column(String(32), default="trial")
+    # billing (Razorpay)
+    razorpay_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    subscription_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # outgoing webhook when a run finishes (CI / Slack integrations)
+    webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    webhook_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class User(Base):
+    """A person who signs in to the dashboard. id = Supabase Auth user id."""
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), primary_key=True, index=True)
+    role: Mapped[str] = mapped_column(String(16), default="owner")  # owner | member
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -62,6 +84,7 @@ class Run(Base):
     agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), index=True)
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     config: Mapped[dict] = mapped_column(JSON, default=dict)  # scenarios, personas, max_turns, label
+    baseline_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # set for regression re-runs
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # LLM calls/tokens, for cost tracking
     conversations: Mapped[int] = mapped_column(Integer, default=0)   # billable unit

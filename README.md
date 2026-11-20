@@ -2,7 +2,7 @@
 
 **Automated testing for Indian-language voice and chat AI agents.** Corella plays simulated Indian customers (Hindi, Hinglish, regional accents; angry, confused, manipulative), talks to a customer's agent, scores every conversation, and shows exactly which turn failed and how to fix the prompt.
 
-Website: corella.live · Version 0.2 (chat testing SaaS backend). Proprietary, see LICENSE.
+Website: corella.live · Version 0.3 (chat testing SaaS: API, dashboard, billing). Proprietary, see LICENSE.
 
 ## Architecture
 
@@ -27,7 +27,19 @@ Website: corella.live · Version 0.2 (chat testing SaaS backend). Proprietary, s
 | `security.py` | Hashed API keys, SSRF protection for customer URLs |
 | `report.py` | HTML failure report and JSON export |
 
+## Repository layout
+
+- `src/corella/`: Python API, worker and test engine
+- `web/`: Next.js dashboard and the corella.live landing page (deploy on Vercel)
+- `tests/`: backend tests (offline, mock LLM)
+
 ## Commercial features in place
+
+- **Self-serve sign-up:** Google or email magic link (Supabase Auth), free trial workspace created on first sign-in.
+- **Dashboard:** overview with usage, agents, test runs with transcripts, failing turns and suggested fixes, shareable reports.
+- **Billing:** Razorpay subscriptions (UPI, cards, netbanking); plans change only through verified Razorpay webhooks. Cancel at period end.
+- **Regression testing:** re-run a finished run's exact scenarios after a prompt change and see what broke or got fixed (paid plans).
+- **CI and integrations:** API keys managed in the dashboard; signed run-finished webhooks with regression results (Growth).
 
 - **Multi-tenant:** every row belongs to an organization; cross-tenant access returns 404.
 - **API keys:** `crl_live_…`, shown once, stored only as SHA-256 hashes, revocable.
@@ -68,6 +80,11 @@ All requests: `Authorization: Bearer crl_live_...`
 | GET | `/v1/runs`, `/v1/runs/{id}` | Run status and summary |
 | GET | `/v1/runs/{id}/results?failed_only=true` | Transcripts, scores, failures, fixes |
 | GET | `/v1/runs/{id}/report` | Shareable HTML report |
+| POST | `/v1/runs/{id}/rerun` | Regression re-run of the same scenarios |
+| GET | `/v1/runs/{id}/compare` | What regressed / got fixed vs the baseline |
+| GET/POST/DELETE | `/v1/api-keys` | Manage API keys |
+| PUT | `/v1/settings/webhook` | Run-finished webhook (signed with HMAC-SHA256) |
+| POST | `/v1/billing/checkout`, `/v1/billing/cancel` | Razorpay subscription |
 
 HTTP agents receive `POST {"messages": [{"role": "user"|"assistant", "content": "..."}]}`; set `reply_field` to the reply's JSON path (e.g. `choices.0.message.content`).
 
@@ -76,11 +93,18 @@ HTTP agents receive `POST {"messages": [{"role": "user"|"assistant", "content": 
 - Encrypt stored agent credentials (`agents.target.headers`) with a KMS-managed key.
 - Add Alembic migrations (tables are currently created on startup).
 - Rate limiting at the edge, error tracking (e.g. Sentry), daily database backups.
-- Terms of service, privacy policy and a data processing agreement (customer conversations may contain personal data; DPDP Act 2023 applies in India).
+- Replace the placeholder Terms and Privacy pages (web/app/terms, web/app/privacy) with lawyer-drafted text: terms of service, privacy policy and a data processing agreement (customer conversations may contain personal data; DPDP Act 2023 applies in India).
+
+## Dashboard (web/)
+
+```bash
+cd web && cp .env.example .env.local   # Supabase URL + anon key, API URL
+npm install && npm run dev             # http://localhost:3000
+```
 
 ## Roadmap
 
-1. Web dashboard (sign-up, agents, runs, reports) and Razorpay/Stripe billing
+1. Stripe billing for international customers; team invites
 2. Voice testing: synthetic Indian voices, accents and noise over telephony
 3. Regression runs on every prompt change (CI integration, webhooks)
 4. Production call monitoring and the trust certificate

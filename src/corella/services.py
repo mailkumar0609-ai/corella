@@ -1,8 +1,14 @@
 """Business logic shared by the API, worker and CLI."""
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
+import secrets
 from datetime import datetime, timezone
+
+import httpx
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -10,7 +16,7 @@ from sqlalchemy.orm import Session
 from . import engine as eng
 from .config import PLANS, settings
 from .llm import get_llm
-from .models import Agent, ApiKey, Organization, Result, Run, now
+from .models import Agent, ApiKey, Membership, Organization, Result, Run, User, now
 from .report import summary
 from .security import generate_api_key, hash_key
 
@@ -23,12 +29,14 @@ class QuotaExceeded(Exception):
 
 # ---------- organizations and keys ----------
 
-def create_organization(db: Session, name: str, plan: str = "trial") -> tuple[Organization, str]:
+def create_organization(db: Session, name: str, plan: str = "trial", owner: User | None = None) -> tuple[Organization, str]:
     if plan not in PLANS:
         raise ValueError(f"Unknown plan '{plan}'")
-    org = Organization(name=name, plan=plan)
+    org = Organization(name=name, plan=plan, webhook_secret=secrets.token_hex(24))
     db.add(org)
     db.flush()
+    if owner:
+        db.add(Membership(user_id=owner.id, organization_id=org.id, role="owner"))
     raw = create_api_key(db, org.id)
     db.commit()
     return org, raw
@@ -114,7 +122,50 @@ def execute_run(db: Session, run: Run, llm=None) -> Run:
         run.status, run.error = "failed", f"{type(e).__name__}: {e}"
     run.usage, run.finished_at = {"llm": llm.name, "model": llm.model, **llm.usage()}, now()
     db.commit()
+    deliver_webhook(db, run)
     return run
+
+
+# ---------- regression ----------
+
+def compare_runs(db: Session, run: Run, baseline: Run) -> dict:
+    """Per-scenario diff: what broke (regressed), what got fixed, what is new."""
+    def status(r: Run) -> dict:
+        return {x.scenario["id"]: x.passed for x in r.results}
+    now_, before = status(run), status(baseline)
+    regressed = sorted(k for k, v in now_.items() if before.get(k) is True and not v)
+    fixed = sorted(k for k, v in now_.items() if before.get(k) is False and v)
+    return {"run_id": run.id, "baseline_run_id": baseline.id, "regressed": regressed, "fixed": fixed,
+            "unchanged": len([k for k in now_ if k in before and before[k] == now_[k]]),
+            "new": sorted(k for k in now_ if k not in before),
+            "pass_rate": (run.summary or {}).get("passed", 0) / max((run.summary or {}).get("total", 1), 1),
+            "baseline_pass_rate": (baseline.summary or {}).get("passed", 0) / max((baseline.summary or {}).get("total", 1), 1)}
+
+
+# ---------- outgoing webhooks ----------
+
+def sign(secret: str, body: bytes) -> str:
+    return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def deliver_webhook(db: Session, run: Run) -> None:
+    org = db.get(Organization, run.organization_id)
+    if not (org.webhook_url and PLANS[org.plan]["webhooks"]):
+        return
+    payload = {"event": f"run.{run.status}", "run": {"id": run.id, "agent_id": run.agent_id, "status": run.status,
+               "summary": run.summary, "report_url": f"{settings.app_url}/runs/{run.id}"}}
+    if run.baseline_run_id and run.status == "completed":
+        base = db.get(Run, run.baseline_run_id)
+        if base:
+            payload["comparison"] = compare_runs(db, run, base)
+    body = json.dumps(payload, default=str).encode()
+    try:
+        from .security import check_target_url
+        check_target_url(org.webhook_url, settings.allow_private_targets)
+        httpx.post(org.webhook_url, content=body, timeout=10, headers={
+            "content-type": "application/json", "x-corella-signature": sign(org.webhook_secret or "", body)})
+    except Exception as e:  # never fail a run because a customer's webhook is down
+        log.warning("webhook for run %s failed: %s", run.id, e)
 
 
 def run_results_as_engine(run: Run) -> list[eng.Result]:
