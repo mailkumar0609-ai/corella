@@ -61,13 +61,15 @@ def parse_json(text: str):
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
     if fence:
         text = fence.group(1).strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        m = re.search(r"(\{.*\}|\[.*\])", text, re.S)
-        if not m:
-            raise LLMError(f"Model did not return JSON: {text[:200]}")
-        return json.loads(m.group(1))
+    for candidate in (text, re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)):  # also try with stray backslashes escaped
+        try:
+            return json.loads(candidate, strict=False)
+        except json.JSONDecodeError:
+            pass
+    m = re.search(r"(\{.*\}|\[.*\])", text, re.S)
+    if not m:
+        raise LLMError(f"Model did not return JSON: {text[:200]}")
+    return json.loads(m.group(1), strict=False)
 
 
 class _HttpLLM(LLM):
