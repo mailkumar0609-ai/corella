@@ -76,7 +76,8 @@ class _HttpLLM(LLM):
                     time.sleep(delay)
                     delay *= 2
                     continue
-                r.raise_for_status()
+                if r.status_code >= 400:
+                    raise LLMError(f"{self.name} HTTP {r.status_code}: {r.text[:500]}")
                 return r.json()
             except httpx.TransportError as e:
                 if attempt >= settings.llm_max_retries:

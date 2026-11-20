@@ -124,7 +124,8 @@ def simulate(llm: LLM, target: Target, sc: Scenario, max_turns: int = 6) -> list
         agent_view = [{"role": "user" if t["role"] == "customer" else "assistant", "content": t["content"]} for t in transcript]
         transcript.append({"role": "agent", "content": target.reply(agent_view)})
         # from the simulator's point of view the agent is the 'user'
-        sim_view = [{"role": "assistant" if t["role"] == "customer" else "user", "content": t["content"]} for t in transcript]
+        sim_view = [{"role": "user", "content": "(Call connected. Start the conversation.)"}] + [
+            {"role": "assistant" if t["role"] == "customer" else "user", "content": t["content"]} for t in transcript]
         nxt = llm.complete(sys, sim_view, 300).strip()
         if nxt.startswith("[END]"):
             break
