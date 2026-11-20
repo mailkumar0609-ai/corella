@@ -29,7 +29,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 @asynccontextmanager
 async def lifespan(_app):
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        from sqlalchemy.engine import make_url
+        try:
+            u = make_url(settings.database_url)
+            where = f"{u.drivername}://{u.username}@{u.host}:{u.port}/{u.database}"
+        except Exception:
+            where = "unparseable DATABASE_URL"
+        log.error("DATABASE CONNECTION FAILED (%s): %s: %s", where, type(e).__name__, str(e).splitlines()[0])
+        raise
     stop, thread = None, None
     if settings.embedded_worker:
         import threading
@@ -42,6 +52,9 @@ async def lifespan(_app):
     if stop:
         stop.set()
         thread.join(timeout=30)
+
+
+log = logging.getLogger("corella.api")
 
 
 app = FastAPI(title="Corella API", version=__version__, lifespan=lifespan,
