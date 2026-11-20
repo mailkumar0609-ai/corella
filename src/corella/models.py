@@ -126,9 +126,10 @@ if engine.dialect.name == "postgresql":
 
 
 def init_db():
-    """Creates tables. In production, manage schema changes with migrations (Alembic) instead."""
+    """Create the private schema if needed, then apply any pending migrations (src/corella/migrations)."""
     if engine.dialect.name == "postgresql":
         with engine.begin() as conn:
             conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{DB_SCHEMA}"'))
             conn.execute(text(f'REVOKE ALL ON SCHEMA "{DB_SCHEMA}" FROM PUBLIC'))
-    Base.metadata.create_all(engine)
+    from .migrate import upgrade
+    upgrade(engine)

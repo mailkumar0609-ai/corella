@@ -77,7 +77,15 @@ def main(argv=None):
     ad.add_argument("arg", help="org name (create-org) or org id")
     ad.add_argument("plan_name", nargs="?", help="plan for set-plan")
     ad.add_argument("--plan", default="trial", help="plan for create-org")
+    dbp = sub.add_parser("db", help="schema migrations")
+    dbp.add_argument("action", choices=["upgrade", "revision"])
+    dbp.add_argument("-m", "--message", default="schema change", help="revision message")
     a = p.parse_args(argv)
+    if a.cmd == "db":
+        from .models import init_db
+        from .migrate import revision
+        init_db() if a.action == "upgrade" else revision(a.message)
+        return 0
     if a.cmd == "run":
         return cmd_run(a)
     if a.cmd == "worker":

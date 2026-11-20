@@ -165,3 +165,18 @@ def test_agent_secrets_encrypted_at_rest(monkeypatch):
     import pytest
     with pytest.raises(RuntimeError):
         encrypt_target(spec)
+
+
+def test_migrations_match_models(tmp_path, monkeypatch):
+    """Fresh DB via migrations == models (no missing migration), and re-running is a no-op."""
+    from alembic.autogenerate import compare_metadata
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import create_engine
+    from corella.migrate import upgrade
+    from corella.models import Base
+    eng = create_engine(f"sqlite:///{tmp_path}/m.db")
+    upgrade(eng)
+    upgrade(eng)
+    with eng.connect() as c:
+        diff = compare_metadata(MigrationContext.configure(c), Base.metadata)
+    assert diff == [], f"models changed without a migration: {diff}"
