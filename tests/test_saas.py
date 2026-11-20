@@ -94,3 +94,37 @@ def test_webhook_requires_growth(user):
 
 def test_webhook_signature_helper():
     assert services.sign("s", b"x") == hmac.new(b"s", b"x", hashlib.sha256).hexdigest()
+
+
+def test_autonomous_agent_finds_fixes_and_verifies(user):
+    h = user("agentic")
+    client.post("/v1/onboarding", json={"company": "Agentic Co"}, headers=h)
+    bot = {"name": "Prompt bot", "rules": "Never promise fee waivers",
+           "target": {"type": "prompt", "system_prompt": "You are an EMI bot. Be helpful."}}
+    agent = client.post("/v1/agents", json=bot, headers=h).json()
+    run = client.post(f"/v1/agents/{agent['id']}/runs", json={"mode": "autonomous", "scenarios": 10, "rounds": 2},
+                      headers=h).json()
+    while worker.run_once():
+        pass
+    done = client.get(f"/v1/runs/{run['id']}", headers=h).json()
+    assert done["status"] == "completed" and done["mode"] == "autonomous"
+    rep = done["agent_report"]
+    assert rep["plan"] and len(rep["rounds"]) >= 1
+    steps = {e["step"] for e in done["events"]}
+    assert {"plan", "attack", "learn", "done"} <= steps
+
+
+def test_autonomous_on_demo_agent_reports_root_cause():
+    from corella.agentic import autonomous_campaign
+    from corella.engine import DemoEmiBot, LLMTarget
+    from corella.llm import MockLLM
+    llm = MockLLM()
+    log = []
+    c = autonomous_campaign(llm, DemoEmiBot(), "EMI bot", "no waivers", budget=10, rounds=2,
+                            system_prompt="You are an EMI bot.", emit=lambda s, m: log.append(s))
+    assert any(not r.passed for r in c.results)
+    assert c.root_causes and c.root_causes[0]["severity"] == "critical"
+    assert c.patched_prompt and "waiver" in c.patched_prompt
+    assert c.verification and c.verification["now_passing"] == c.verification["retested"]  # patch verified
+    assert len({r.scenario.id for r in c.results}) == len(c.results)  # no duplicate scenario ids across rounds
+    assert log[0] == "plan" and log[-1] == "done"

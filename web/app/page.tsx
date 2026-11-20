@@ -11,10 +11,10 @@ const FAILS = [
 ];
 
 const STEPS = [
-  ["Connect", "Point Corella at your agent's chat endpoint, or paste its system prompt."],
-  ["Simulate", "Hundreds of synthetic Indian customers talk to it at once, each with a goal and a personality."],
-  ["Score", "Every conversation is graded on task success, accuracy, compliance, language and tone."],
-  ["Fix and re-run", "See the exact turn that failed with a suggested prompt fix, then re-run the same tests to prove it's fixed."],
+  ["Plan", "Corella's testing agent reads your agent's job and rules, and decides which risks to attack first."],
+  ["Attack", "Adaptive Indian customers talk to your agent. When it resists, they rephrase, switch language and push harder."],
+  ["Learn and explore", "After each round it groups failures into root causes, then writes harder tests aimed at the weak spots."],
+  ["Fix and verify", "It writes a patched system prompt and replays every failure against it to prove the fix works."],
 ];
 
 const COMPARE = [
@@ -22,6 +22,7 @@ const COMPARE = [
   ["Indian number, date and currency formats tested", true, false],
   ["BFSI compliance checks (lending, collections, insurance)", true, "Generic"],
   ["Rupee pricing, GST invoices, UPI payments", true, false],
+  ["Autonomous agent that writes and verifies a fixed prompt", true, "Partial"],
   ["Regression re-runs and CI API", true, true],
   ["Free plan to start", true, "Varies"],
 ];
@@ -59,7 +60,8 @@ export default function Home() {
       </section>
 
       <section style={{ padding: "32px 0" }}>
-        <h2 style={{ fontSize: 28 }}>How it works</h2>
+        <h2 style={{ fontSize: 28 }}>An AI agent that tests your AI agent</h2>
+        <p className="muted">Not a script runner. Corella hunts for failures the way your best QA engineer would, then hands you the fix.</p>
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", marginTop: 16 }}>
           {STEPS.map(([t, d], i) => (
             <div key={t} className="card"><div className="badge" style={{ marginBottom: 8 }}>{i + 1}</div><h3>{t}</h3><p className="muted" style={{ margin: 0 }}>{d}</p></div>))}

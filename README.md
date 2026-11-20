@@ -2,7 +2,20 @@
 
 **Automated testing for Indian-language voice and chat AI agents.** Corella plays simulated Indian customers (Hindi, Hinglish, regional accents; angry, confused, manipulative), talks to a customer's agent, scores every conversation, and shows exactly which turn failed and how to fix the prompt.
 
-Website: corella.live · Version 0.3 (chat testing SaaS: API, dashboard, billing). Proprietary, see LICENSE.
+Website: corella.live · Version 0.4 (agentic testing SaaS: autonomous testing agent, API, dashboard, billing). Proprietary, see LICENSE.
+
+## The autonomous testing agent (`agentic.py`)
+
+Corella is itself an agentic AI system. In autonomous mode (`"mode": "autonomous"`), it runs a loop instead of a fixed script:
+
+1. **Plan:** reads the agent's description and rules and ranks the risks to attack.
+2. **Attack:** adaptive simulated customers that change tactic when the agent resists (rephrase, switch language, pressure, claimed authority).
+3. **Learn:** clusters every failure into root causes in the agent's instructions.
+4. **Explore:** writes new, harder scenarios aimed at those weak spots, round after round, within the conversation budget.
+5. **Fix:** writes a patched system prompt addressing every root cause.
+6. **Verify:** if Corella has the prompt, replays the failures against the patch and reports how many now pass.
+
+Each step is logged to `runs.events`, which the dashboard shows live.
 
 ## Architecture
 
@@ -17,7 +30,8 @@ Website: corella.live · Version 0.3 (chat testing SaaS: API, dashboard, billing
 
 | Module | Role |
 | --- | --- |
-| `engine.py` | Scenario generation, customer simulation, scoring |
+| `agentic.py` | Autonomous testing agent: plan, attack, learn, explore, fix, verify |
+| `engine.py` | Scenario generation, adaptive customer simulation, scoring |
 | `personas.py` | Built-in Indian customer personas |
 | `llm.py` | Pluggable LLM (Claude, OpenAI, offline mock) with retries and token tracking |
 | `api.py` | Public REST API v1, multi-tenant, API-key auth |

@@ -16,7 +16,9 @@ export default function AgentPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
-  const [count, setCount] = useState(10);
+  const [mode, setMode] = useState<"autonomous" | "standard">("autonomous");
+  const [rounds, setRounds] = useState(3);
+  const [count, setCount] = useState(30);
   const [turns, setTurns] = useState(6);
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
@@ -35,7 +37,9 @@ export default function AgentPage() {
     setBusy(true); setError("");
     try {
       const run = await api<Run>(`/v1/agents/${id}/runs`, { method: "POST",
-        json: { scenarios: count, max_turns: turns, label: label || undefined, personas: picked.length ? picked : undefined } });
+        json: mode === "autonomous"
+          ? { mode, scenarios: count, rounds, max_turns: turns, label: label || undefined }
+          : { mode, scenarios: count, max_turns: turns, label: label || undefined, personas: picked.length ? picked : undefined } });
       await refresh();
       router.push(`/runs/${run.id}`);
     } catch (err) {
@@ -63,12 +67,22 @@ export default function AgentPage() {
 
       <form className="card" onSubmit={start} style={{ margin: "16px 0" }}>
         <h2>Run a test</h2>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {([["autonomous", "Autonomous agent", "Corella plans the attack, adapts round by round to hunt for failures, finds root causes and writes a fixed prompt."],
+             ["standard", "Fixed test set", "Generate a set of scenarios once and run them. Good for quick checks."]] as const).map(([v, t, d]) => (
+            <button type="button" key={v} onClick={() => setMode(v)} className="card"
+              style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit", borderColor: mode === v ? "var(--accent)" : undefined }}>
+              <b>{t}</b>{v === "autonomous" && <span className="badge" style={{ marginLeft: 6 }}>Recommended</span>}
+              <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{d}</div>
+            </button>))}
+        </div>
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-          <div><label>Conversations</label><input type="number" min={1} max={200} value={count} onChange={(e) => setCount(+e.target.value)} /></div>
+          {mode === "autonomous" && <div><label>Rounds</label><input type="number" min={1} max={6} value={rounds} onChange={(e) => setRounds(+e.target.value)} /></div>}
+          <div><label>{mode === "autonomous" ? "Conversation budget" : "Conversations"}</label><input type="number" min={1} max={200} value={count} onChange={(e) => setCount(+e.target.value)} /></div>
           <div><label>Max turns each</label><input type="number" min={1} max={20} value={turns} onChange={(e) => setTurns(+e.target.value)} /></div>
           <div><label>Label <span className="hint">optional</span></label><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Prompt v3" /></div>
         </div>
-        <label>Customer personas <span className="hint">Leave empty to use all {personas.length}.</span></label>
+        {mode === "standard" && <><label>Customer personas <span className="hint">Leave empty to use all {personas.length}.</span></label>
         <div className="row">
           {personas.map((p) => (
             <button type="button" key={p.id} title={p.description}
@@ -77,9 +91,9 @@ export default function AgentPage() {
               {p.id.replace(/_/g, " ")}
             </button>
           ))}
-        </div>
+        </div></>}
         <div className="row" style={{ marginTop: 16 }}>
-          <button className="btn primary" disabled={busy || count > left}>{busy ? "Starting…" : `Run ${count} conversations`}</button>
+          <button className="btn primary" disabled={busy || count > left}>{busy ? "Starting…" : mode === "autonomous" ? `Start agent (up to ${count} conversations)` : `Run ${count} conversations`}</button>
           <span className="muted">{left.toLocaleString("en-IN")} left this month</span>
         </div>
         {count > left && <div className="alert info">Not enough conversations left this month. <Link href="/billing">Upgrade</Link></div>}

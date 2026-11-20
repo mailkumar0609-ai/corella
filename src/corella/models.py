@@ -87,6 +87,8 @@ class Run(Base):
     baseline_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # set for regression re-runs
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # LLM calls/tokens, for cost tracking
+    agent_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # autonomous mode: plan, root causes, patch
+    events: Mapped[list] = mapped_column(JSON, default=list)  # live log of what the agent is doing
     conversations: Mapped[int] = mapped_column(Integer, default=0)   # billable unit
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

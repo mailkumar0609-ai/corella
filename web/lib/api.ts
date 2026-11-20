@@ -51,6 +51,15 @@ export type Summary = { total: number; passed: number; failed: number; errors: n
 export type Run = {
   id: string; agent_id: string; status: string; label: string | null; summary: Summary | null; conversations: number;
   error: string | null; baseline_run_id: string | null; created_at: string; finished_at: string | null;
+  mode: "standard" | "autonomous"; agent_report: AgentReport | null; events: { t: string; step: string; message: string }[];
+};
+export type AgentReport = {
+  plan: { risk: string; why: string; priority: string }[];
+  rounds: { round: number; tested: number; failed: number; focus: string }[];
+  root_causes: { cause: string; severity: string; scenario_ids: string[]; fix: string }[];
+  patched_prompt: string | null;
+  verification: { retested: number; now_passing: number; still_failing: string[]; fixed: string[] } | null;
+  stop_reason: string;
 };
 export type Failure = { turn: number; category: string; issue: string; suggested_fix: string };
 export type ResultRow = {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMe } from "@/components/AppShell";
+import { AgentLog, AgentReport } from "@/components/AgentPanel";
 import RunStatus from "@/components/RunStatus";
 import { api, fmtDate, openReport, passRate, type ResultRow, type Run } from "@/lib/api";
 
@@ -57,7 +58,7 @@ export default function RunPage() {
         if (r.status === "completed") {
           setResults(await api<ResultRow[]>(`/v1/runs/${id}/results`));
           if (r.baseline_run_id) setCmp(await api<Compare>(`/v1/runs/${id}/compare`));
-        } else if (r.status !== "failed") timer = setTimeout(poll, 3000);
+        } else if (r.status !== "failed") timer = setTimeout(poll, r.mode === "autonomous" ? 2000 : 3000);
       } catch (e) { setError(e instanceof Error ? e.message : "Could not load run"); }
     }
     poll();
@@ -89,14 +90,19 @@ export default function RunPage() {
       <p className="muted mono">{run.id} · {fmtDate(run.created_at)}</p>
       {error && <div className="alert">{error}</div>}
       {run.status === "failed" && <div className="alert">This run could not finish: {run.error}. It did not count toward your quota.</div>}
-      {(run.status === "queued" || run.status === "running") && (
+      {(run.status === "queued" || run.status === "running") && run.mode !== "autonomous" && (
         <div className="card"><p>Simulating {run.conversations} customer conversations… This page updates automatically.</p></div>)}
+      {run.mode === "autonomous" && run.status === "queued" && !run.events?.length && (
+        <div className="card" style={{ marginBottom: 16 }}><p>The agent is queued and will start in a moment. This page updates live.</p></div>)}
+      <AgentLog run={run} />
 
       {s && (<div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", margin: "16px 0" }}>
         <div className="card stat"><div className="n">{passRate(s)}%</div><div className="l">Pass rate</div></div>
         <div className="card stat"><div className="n">{s.failed}</div><div className="l">Failed of {s.total}</div></div>
         {Object.entries(s.averages).map(([k, v]) => <div key={k} className="card stat"><div className="n">{v}</div><div className="l">{k.replace("_", " ")} (avg /5)</div></div>)}
       </div>)}
+
+      <AgentReport run={run} />
 
       {cmp && (<div className="card" style={{ marginBottom: 16 }}>
         <h2>Compared with the previous run</h2>

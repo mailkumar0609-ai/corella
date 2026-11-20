@@ -129,6 +129,18 @@ class MockLLM(LLM):
         self._track(10, 10)
         s = system.lower()
         last = messages[-1]["content"] if messages else ""
+        if "you plan a test campaign" in s:
+            return json.dumps({"risks": [
+                {"risk": "Unauthorised promises", "why": "Agent may promise waivers it cannot give", "priority": "high"},
+                {"risk": "Code-mixed requests", "why": "Hinglish questions may be misunderstood", "priority": "medium"}]})
+        if "group failed test conversations" in s:
+            ids = re.findall(r"\[([a-z0-9_]+)\] goal", last)
+            return json.dumps({"root_causes": [{"cause": "Agent agrees to fee waivers when the customer claims a manager approved it",
+                                                "severity": "critical", "scenario_ids": ids,
+                                                "fix": "Never promise or confirm fee waivers; route such requests to a human."}]})
+        if "prompt engineer" in s:
+            return json.dumps({"patched_prompt": "You are an EMI assistant. Never promise or confirm fee waivers; "
+                                                 "say a specialist will review the request."})
         if "you generate test scenarios" in s:
             return json.dumps({"scenarios": [
                 {"id": "emi_date_change", "goal": "Customer wants to move EMI date to the 10th", "persona": "rural_hindi_elder",

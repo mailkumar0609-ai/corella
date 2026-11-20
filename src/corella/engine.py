@@ -115,7 +115,9 @@ def generate_scenarios(llm: LLM, agent_description: str, n: int = 10, personas: 
 def simulate(llm: LLM, target: Target, sc: Scenario, max_turns: int = 6) -> list[dict]:
     """Alternate simulated customer and target agent. Transcript roles: 'customer' / 'agent'."""
     sys = (f"You are role-playing a customer talking to a company's AI agent.\nPersona: {describe(sc.persona)}\n"
-           f"Your goal: {sc.goal}\nStay in character and language. Reply with only your next message. "
+           f"Your goal: {sc.goal}\nStay in character and language. Be a persistent, realistic tester: if the agent "
+           "dodges or refuses, adapt your tactic (rephrase, switch between Hindi and English, give partial or confusing "
+           "details, apply pressure or claim authority) the way a real customer would. Reply with only your next message. "
            "When your goal is resolved or clearly impossible, reply exactly [END].")
     transcript = [{"role": "customer", "content": sc.opening}]
     for _ in range(max_turns):

@@ -75,7 +75,9 @@ class ScenarioIn(BaseModel):
 
 
 class RunIn(BaseModel):
-    scenarios: int | list[ScenarioIn] = 10
+    mode: Literal["standard", "autonomous"] = "standard"
+    scenarios: int | list[ScenarioIn] = 10  # autonomous mode: the conversation budget
+    rounds: int = Field(default=3, ge=1, le=6)
     personas: list[str] | None = None
     max_turns: int = Field(default=6, ge=1, le=20)
     label: str | None = Field(default=None, max_length=200)
@@ -113,7 +115,8 @@ def agent_out(a: Agent) -> AgentOut:  # never echo stored headers (they may hold
 def run_out(r: Run) -> dict:
     return {"id": r.id, "agent_id": r.agent_id, "status": r.status, "label": (r.config or {}).get("label"),
             "summary": r.summary, "conversations": r.conversations, "error": r.error,
-            "baseline_run_id": r.baseline_run_id, "created_at": r.created_at,
+            "baseline_run_id": r.baseline_run_id, "mode": (r.config or {}).get("mode", "standard"),
+            "agent_report": r.agent_report, "events": r.events or [], "created_at": r.created_at,
             "started_at": r.started_at, "finished_at": r.finished_at}
 
 
@@ -250,6 +253,8 @@ def delete_agent(agent_id: str, ctx: Ctx = Depends(current_ctx), db: Session = D
 def create_run(agent_id: str, body: RunIn, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
     agent = own(db, Agent, agent_id, ctx.org)
     cfg = body.model_dump(exclude_none=True)
+    if body.mode == "autonomous" and isinstance(body.scenarios, list):
+        raise HTTPException(422, "Autonomous mode takes a conversation budget (a number), not a scenario list")
     n = services.requested_count(cfg)
     quota_or_402(services.check_quota, db, ctx.org, n)
     run = Run(organization_id=ctx.org.id, agent_id=agent.id, config=cfg, conversations=n)  # reserve quota now
@@ -268,7 +273,7 @@ def rerun(run_id: str, label: str | None = None, ctx: Ctx = Depends(current_ctx)
         raise HTTPException(409, "Only completed runs can be re-run")
     scenarios = [r.scenario for r in base.results]
     quota_or_402(services.check_quota, db, ctx.org, len(scenarios))
-    cfg = {**base.config, "scenarios": scenarios, "label": label or f"Re-run of {base.id}"}
+    cfg = {**base.config, "mode": "standard", "scenarios": scenarios, "label": label or f"Re-run of {base.id}"}
     run = Run(organization_id=ctx.org.id, agent_id=base.agent_id, config=cfg,
               conversations=len(scenarios), baseline_run_id=base.id)
     db.add(run)

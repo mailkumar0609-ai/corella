@@ -109,14 +109,29 @@ def execute_run(db: Session, run: Run, llm=None) -> Run:
     try:
         target = eng.build_target(agent.target, llm, settings.allow_private_targets)
         desc = f"{agent.name}: {agent.description}"
-        sc = cfg.get("scenarios", 10)
-        scenarios = ([eng.Scenario(**s) for s in sc] if isinstance(sc, list)
-                     else eng.generate_scenarios(llm, desc, int(sc), cfg.get("personas")))
-        results = eng.run_suite(llm, target, scenarios, agent.rules, cfg.get("max_turns", 6), cfg.get("workers", 4))
+        if cfg.get("mode") == "autonomous":
+            from .agentic import autonomous_campaign
+
+            def emit(step: str, msg: str):
+                run.events = [*(run.events or []), {"t": now().isoformat(), "step": step, "message": msg}]
+                db.commit()
+
+            camp = autonomous_campaign(
+                llm, target, desc, agent.rules, budget=int(cfg.get("scenarios", 30)), rounds=cfg.get("rounds", 3),
+                max_turns=cfg.get("max_turns", 6), workers=cfg.get("workers", 4),
+                system_prompt=agent.target.get("system_prompt"), emit=emit)
+            results, run.agent_report = camp.results, camp.to_dict()
+            used = len(results) + ((camp.verification or {}).get("retested", 0))
+        else:
+            sc = cfg.get("scenarios", 10)
+            scenarios = ([eng.Scenario(**s) for s in sc] if isinstance(sc, list)
+                         else eng.generate_scenarios(llm, desc, int(sc), cfg.get("personas")))
+            results = eng.run_suite(llm, target, scenarios, agent.rules, cfg.get("max_turns", 6), cfg.get("workers", 4))
+            used = len(results)
         for r in results:
             db.add(Result(run_id=run.id, organization_id=run.organization_id, scenario=r.scenario.__dict__,
                           transcript=r.transcript, score=r.score, passed=r.passed, error=r.error))
-        run.summary, run.status, run.conversations = summary(results), "completed", len(results)
+        run.summary, run.status, run.conversations = summary(results), "completed", used
     except Exception as e:
         log.exception("run %s failed", run.id)
         run.status, run.error = "failed", f"{type(e).__name__}: {e}"
