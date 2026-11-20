@@ -16,6 +16,8 @@ class Settings:
     db_schema: str = field(default_factory=lambda: _env("CORELLA_DB_SCHEMA", "corella"))
     llm_provider: str = field(default_factory=lambda: _env("CORELLA_LLM"))
     llm_model: str = field(default_factory=lambda: _env("CORELLA_MODEL"))
+    # Cheaper model for the simulated customer (most of the token volume); judging stays on CORELLA_MODEL
+    sim_model: str = field(default_factory=lambda: _env("CORELLA_SIM_MODEL"))
     anthropic_api_key: str = field(default_factory=lambda: _env("ANTHROPIC_API_KEY"))
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     llm_timeout: float = field(default_factory=lambda: float(_env("CORELLA_LLM_TIMEOUT", "120")))

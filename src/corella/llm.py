@@ -31,15 +31,25 @@ class LLM:
         self.input_tokens = 0
         self.output_tokens = 0
         self.calls = 0
+        self.by_model: dict[str, dict] = {}
 
-    def _track(self, inp: int, out: int):
+    def _track(self, inp: int, out: int, model: str | None = None):
         with self._lock:
             self.input_tokens += inp
             self.output_tokens += out
             self.calls += 1
+            m = self.by_model.setdefault(model or self.model, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+            m["calls"] += 1
+            m["input_tokens"] += inp
+            m["output_tokens"] += out
 
     def usage(self) -> dict:
-        return {"calls": self.calls, "input_tokens": self.input_tokens, "output_tokens": self.output_tokens}
+        return {"calls": self.calls, "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
+                "by_model": self.by_model}
+
+    def complete_sim(self, system: str, messages: list[dict], max_tokens: int = 300) -> str:
+        """Role-playing the simulated customer: high volume, so providers may route it to a cheaper model."""
+        return self.complete(system, messages, max_tokens)
 
     def complete(self, system: str, messages: list[dict], max_tokens: int = 800) -> str:
         raise NotImplementedError
@@ -104,13 +114,24 @@ class AnthropicLLM(_HttpLLM):
         if not settings.anthropic_api_key:
             raise LLMError("ANTHROPIC_API_KEY is not set")
         self.model = model or settings.llm_model or "claude-sonnet-5-5"
+        self.sim_model = settings.sim_model or "claude-haiku-5-5"
 
-    def complete(self, system, messages, max_tokens=800):
+    def complete(self, system, messages, max_tokens=800, model: str | None = None):
+        model = model or self.model
         out = self._post({"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01"},
-                         {"model": self.model, "max_tokens": max_tokens, "system": system, "messages": messages})
+                         {"model": model, "max_tokens": max_tokens, "system": system, "messages": messages})
         u = out.get("usage", {})
-        self._track(u.get("input_tokens", 0), u.get("output_tokens", 0))
+        self._track(u.get("input_tokens", 0), u.get("output_tokens", 0), model)
         return "".join(b.get("text", "") for b in out["content"])
+
+    def complete_sim(self, system, messages, max_tokens=300):
+        if self.sim_model != self.model:
+            try:
+                return self.complete(system, messages, max_tokens, model=self.sim_model)
+            except LLMError as e:  # e.g. model not available on this account: fall back to the main model
+                log.warning("simulator model %s failed (%s); using %s", self.sim_model, str(e)[:120], self.model)
+                self.sim_model = self.model
+        return self.complete(system, messages, max_tokens)
 
     def complete_json(self, system, prompt, max_tokens=1500):
         """Forced tool call: the API returns parsed JSON, so quotes inside Hindi/Hinglish text can't break it."""
