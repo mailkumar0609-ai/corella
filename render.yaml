@@ -1,4 +1,5 @@
-# Render Blueprint: API + background worker, both built from the Dockerfile.
+# Render Blueprint: one service running the API with the background worker inside it (cheapest setup).
+# To scale later: set CORELLA_EMBEDDED_WORKER=false and add a `worker` service with dockerCommand `corella worker`.
 # In Render: New > Blueprint > pick this repo. Render asks for every `sync: false` value once.
 services:
   - type: web
@@ -8,9 +9,11 @@ services:
     plan: starter
     healthCheckPath: /healthz
     autoDeploy: true
-    envVars: &shared
+    envVars:
       - key: CORELLA_ENV
         value: production
+      - key: CORELLA_EMBEDDED_WORKER
+        value: "true"
       - key: DATABASE_URL          # Supabase > Connect > Session pooler URI, with postgresql+psycopg:// prefix
         sync: false
       - key: CORELLA_DB_SCHEMA
@@ -40,11 +43,3 @@ services:
       - key: RAZORPAY_PLAN_GROWTH
         sync: false
 
-  - type: worker
-    name: corella-worker
-    runtime: docker
-    region: singapore
-    plan: starter
-    dockerCommand: corella worker
-    autoDeploy: true
-    envVars: *shared

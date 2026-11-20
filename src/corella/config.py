@@ -20,6 +20,9 @@ class Settings:
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     llm_timeout: float = field(default_factory=lambda: float(_env("CORELLA_LLM_TIMEOUT", "120")))
     llm_max_retries: int = field(default_factory=lambda: int(_env("CORELLA_LLM_RETRIES", "3")))
+    # Run the background worker inside the API process (cheapest hosting: one service). Use a separate
+    # `corella worker` service instead once volume grows.
+    embedded_worker: bool = field(default_factory=lambda: _env("CORELLA_EMBEDDED_WORKER", "false").lower() == "true")
     worker_poll_seconds: float = field(default_factory=lambda: float(_env("CORELLA_WORKER_POLL", "2")))
     # Blocks tests against private/internal addresses (SSRF protection). Disable only for local development.
     allow_private_targets: bool = field(default_factory=lambda: _env("CORELLA_ALLOW_PRIVATE_TARGETS", "false").lower() == "true")

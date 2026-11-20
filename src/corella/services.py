@@ -101,6 +101,18 @@ def claim_next_run(db: Session) -> Run | None:
     return db.get(Run, run.id) if claimed else None
 
 
+def requeue_stale_runs(db: Session, minutes: int = 30) -> int:
+    """Put runs that were interrupted (e.g. by a restart or deploy) back in the queue."""
+    from datetime import timedelta
+    cutoff = now() - timedelta(minutes=minutes)
+    n = db.execute(update(Run).where(Run.status == "running", Run.started_at < cutoff)
+                   .values(status="queued", started_at=None, events=[])).rowcount
+    db.commit()
+    if n:
+        log.warning("requeued %d interrupted run(s)", n)
+    return n
+
+
 def execute_run(db: Session, run: Run, llm=None) -> Run:
     """Generate scenarios (if needed), simulate, score and store results."""
     agent = db.get(Agent, run.agent_id)

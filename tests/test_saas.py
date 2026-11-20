@@ -128,3 +128,22 @@ def test_autonomous_on_demo_agent_reports_root_cause():
     assert c.verification and c.verification["now_passing"] == c.verification["retested"]  # patch verified
     assert len({r.scenario.id for r in c.results}) == len(c.results)  # no duplicate scenario ids across rounds
     assert log[0] == "plan" and log[-1] == "done"
+
+
+def test_embedded_worker_processes_runs(user):
+    import threading
+    import time as _t
+    h = user("embed")
+    client.post("/v1/onboarding", json={"company": "Embed Co"}, headers=h)
+    agent = client.post("/v1/agents", json=DEMO, headers=h).json()
+    run = client.post(f"/v1/agents/{agent['id']}/runs", json={"scenarios": 2, "max_turns": 2}, headers=h).json()
+    stop = threading.Event()
+    t = threading.Thread(target=worker.loop, args=(stop,), daemon=True)
+    t.start()
+    for _ in range(50):
+        if client.get(f"/v1/runs/{run['id']}", headers=h).json()["status"] == "completed":
+            break
+        _t.sleep(0.1)
+    stop.set()
+    t.join(5)
+    assert client.get(f"/v1/runs/{run['id']}", headers=h).json()["status"] == "completed"

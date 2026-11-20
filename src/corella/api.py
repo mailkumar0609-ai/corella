@@ -30,7 +30,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(_app):
     init_db()
+    stop, thread = None, None
+    if settings.embedded_worker:
+        import threading
+
+        from .worker import loop
+        stop = threading.Event()
+        thread = threading.Thread(target=loop, args=(stop,), name="corella-worker", daemon=True)
+        thread.start()
     yield
+    if stop:
+        stop.set()
+        thread.join(timeout=30)
 
 
 app = FastAPI(title="Corella API", version=__version__, lifespan=lifespan,
