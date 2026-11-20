@@ -110,6 +110,23 @@ class AnthropicLLM(_HttpLLM):
         self._track(u.get("input_tokens", 0), u.get("output_tokens", 0))
         return "".join(b.get("text", "") for b in out["content"])
 
+    def complete_json(self, system, prompt, max_tokens=1500):
+        """Forced tool call: the API returns parsed JSON, so quotes inside Hindi/Hinglish text can't break it."""
+        tool = {"name": "respond", "description": "Return the requested JSON answer in `data`.",
+                "input_schema": {"type": "object", "properties": {"data": {"description": "The full JSON answer"}},
+                                 "required": ["data"]}}
+        out = self._post({"x-api-key": settings.anthropic_api_key, "anthropic-version": "2023-06-01"},
+                         {"model": self.model, "max_tokens": max_tokens + 500, "system": system,
+                          "messages": [{"role": "user", "content": prompt}],
+                          "tools": [tool], "tool_choice": {"type": "tool", "name": "respond"}})
+        u = out.get("usage", {})
+        self._track(u.get("input_tokens", 0), u.get("output_tokens", 0))
+        for b in out["content"]:
+            if b.get("type") == "tool_use":
+                data = b["input"].get("data", b["input"])
+                return parse_json(data) if isinstance(data, str) else data
+        raise LLMError("anthropic returned no JSON tool output")
+
 
 class OpenAILLM(_HttpLLM):
     name, url = "openai", "https://api.openai.com/v1/chat/completions"
