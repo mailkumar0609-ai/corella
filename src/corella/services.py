@@ -18,7 +18,7 @@ from .config import PLANS, settings
 from .llm import get_llm
 from .models import Agent, ApiKey, Membership, Organization, Result, Run, User, now
 from .report import summary
-from .security import generate_api_key, hash_key
+from .security import decrypt_target, generate_api_key, hash_key
 
 log = logging.getLogger("corella.services")
 
@@ -119,7 +119,8 @@ def execute_run(db: Session, run: Run, llm=None) -> Run:
     cfg = run.config or {}
     llm = llm or get_llm(cfg.get("llm"))
     try:
-        target = eng.build_target(agent.target, llm, settings.allow_private_targets)
+        spec = decrypt_target(agent.target)
+        target = eng.build_target(spec, llm, settings.allow_private_targets)
         desc = f"{agent.name}: {agent.description}"
         if cfg.get("mode") == "autonomous":
             from .agentic import autonomous_campaign
@@ -131,7 +132,7 @@ def execute_run(db: Session, run: Run, llm=None) -> Run:
             camp = autonomous_campaign(
                 llm, target, desc, agent.rules, budget=int(cfg.get("scenarios", 30)), rounds=cfg.get("rounds", 3),
                 max_turns=cfg.get("max_turns", 6), workers=cfg.get("workers", 4),
-                system_prompt=agent.target.get("system_prompt"), emit=emit)
+                system_prompt=spec.get("system_prompt"), emit=emit)
             results, run.agent_report = camp.results, camp.to_dict()
             used = len(results) + ((camp.verification or {}).get("retested", 0))
         else:

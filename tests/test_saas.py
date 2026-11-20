@@ -147,3 +147,21 @@ def test_embedded_worker_processes_runs(user):
     stop.set()
     t.join(5)
     assert client.get(f"/v1/runs/{run['id']}", headers=h).json()["status"] == "completed"
+
+
+def test_agent_secrets_encrypted_at_rest(monkeypatch):
+    from corella.config import settings
+    from corella.security import decrypt_target, encrypt_target
+    monkeypatch.setattr(settings, "encryption_key", "test-key-123")
+    spec = {"type": "http", "url": "https://bot.example.com", "headers": {"Authorization": "Bearer s3cret"},
+            "system_prompt": "confidential"}
+    sealed = encrypt_target(spec)
+    assert "headers" not in sealed and "system_prompt" not in sealed and "s3cret" not in str(sealed)
+    assert sealed["url"] == spec["url"]
+    assert decrypt_target(sealed) == spec
+    assert decrypt_target({"type": "demo"}) == {"type": "demo"}  # legacy/plain specs pass through
+    monkeypatch.setattr(settings, "env", "production")
+    monkeypatch.setattr(settings, "encryption_key", "")
+    import pytest
+    with pytest.raises(RuntimeError):
+        encrypt_target(spec)

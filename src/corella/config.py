@@ -29,6 +29,8 @@ class Settings:
     # Blocks tests against private/internal addresses (SSRF protection). Disable only for local development.
     allow_private_targets: bool = field(default_factory=lambda: _env("CORELLA_ALLOW_PRIVATE_TARGETS", "false").lower() == "true")
     max_scenarios_per_run: int = field(default_factory=lambda: int(_env("CORELLA_MAX_SCENARIOS", "200")))
+    # Encrypts customers' agent credentials and prompts at rest. Any long random string; never change it once set.
+    encryption_key: str = field(default_factory=lambda: _env("CORELLA_ENCRYPTION_KEY"))
     supabase_url: str = field(default_factory=lambda: _env("SUPABASE_URL").rstrip("/"))
     supabase_anon_key: str = field(default_factory=lambda: _env("SUPABASE_ANON_KEY"))
     razorpay_key_id: str = field(default_factory=lambda: _env("RAZORPAY_KEY_ID"))

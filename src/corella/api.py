@@ -22,7 +22,7 @@ from .config import PLANS, settings
 from .models import Agent, ApiKey, Membership, Organization, Result, Run, User, init_db
 from .personas import PERSONAS
 from .report import render_html
-from .security import UnsafeTarget, check_target_url
+from .security import UnsafeTarget, check_target_url, encrypt_target
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -245,8 +245,12 @@ def create_agent(body: AgentIn, ctx: Ctx = Depends(current_ctx), db: Session = D
     if t.type == "prompt" and not t.system_prompt:
         raise HTTPException(422, "target.system_prompt is required for prompt targets")
     quota_or_402(services.check_agent_limit, db, ctx.org)
+    try:
+        sealed = encrypt_target(t.model_dump(exclude_none=True))
+    except RuntimeError as e:  # encryption key missing in production: refuse rather than store secrets in plain text
+        raise HTTPException(503, str(e))
     a = Agent(organization_id=ctx.org.id, name=body.name, description=body.description, rules=body.rules,
-              target=t.model_dump(exclude_none=True))
+              target=sealed)
     db.add(a)
     db.commit()
     return agent_out(a)
