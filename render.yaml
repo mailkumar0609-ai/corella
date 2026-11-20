@@ -1,0 +1,50 @@
+# Render Blueprint: API + background worker, both built from the Dockerfile.
+# In Render: New > Blueprint > pick this repo. Render asks for every `sync: false` value once.
+services:
+  - type: web
+    name: corella-api
+    runtime: docker
+    region: singapore
+    plan: starter
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars: &shared
+      - key: CORELLA_ENV
+        value: production
+      - key: DATABASE_URL          # Supabase > Connect > Session pooler URI, with postgresql+psycopg:// prefix
+        sync: false
+      - key: CORELLA_DB_SCHEMA
+        value: corella
+      - key: CORELLA_LLM
+        value: anthropic
+      - key: CORELLA_MODEL
+        value: claude-sonnet-5-5
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://ejotnookcdpsgbkncjcw.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: sb_publishable_4qC61mZgIpAXhf454Ny1WQ_cDLB-A45
+      - key: CORELLA_CORS_ORIGINS
+        value: https://corella.live,https://www.corella.live
+      - key: CORELLA_APP_URL
+        value: https://corella.live
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: RAZORPAY_PLAN_STARTER
+        sync: false
+      - key: RAZORPAY_PLAN_GROWTH
+        sync: false
+
+  - type: worker
+    name: corella-worker
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerCommand: corella worker
+    autoDeploy: true
+    envVars: *shared

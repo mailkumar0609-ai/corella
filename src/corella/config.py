@@ -13,6 +13,7 @@ def _env(name: str, default: str = "") -> str:
 class Settings:
     env: str = field(default_factory=lambda: _env("CORELLA_ENV", "development"))
     database_url: str = field(default_factory=lambda: _env("DATABASE_URL", "sqlite:///./corella.db"))
+    db_schema: str = field(default_factory=lambda: _env("CORELLA_DB_SCHEMA", "corella"))
     llm_provider: str = field(default_factory=lambda: _env("CORELLA_LLM"))
     llm_model: str = field(default_factory=lambda: _env("CORELLA_MODEL"))
     anthropic_api_key: str = field(default_factory=lambda: _env("ANTHROPIC_API_KEY"))

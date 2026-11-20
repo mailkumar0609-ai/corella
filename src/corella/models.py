@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from .config import settings
@@ -114,7 +114,21 @@ _kw = {"connect_args": {"check_same_thread": False}} if settings.database_url.st
 engine = create_engine(settings.database_url, **_kw)
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
+# On Postgres, keep Corella's tables in a private schema. Supabase exposes the "public" schema to anyone
+# holding the publishable key (which is embedded in the website), so our data must never live there.
+DB_SCHEMA = settings.db_schema
+if engine.dialect.name == "postgresql":
+    @event.listens_for(engine, "connect")
+    def _search_path(dbapi_conn, _record):
+        with dbapi_conn.cursor() as cur:
+            cur.execute(f'SET search_path TO "{DB_SCHEMA}"')
+        dbapi_conn.commit()
+
 
 def init_db():
     """Creates tables. In production, manage schema changes with migrations (Alembic) instead."""
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{DB_SCHEMA}"'))
+            conn.execute(text(f'REVOKE ALL ON SCHEMA "{DB_SCHEMA}" FROM PUBLIC'))
     Base.metadata.create_all(engine)
