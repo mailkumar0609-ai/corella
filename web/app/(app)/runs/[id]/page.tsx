@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMe } from "@/components/AppShell";
 import { AgentLog, AgentReport } from "@/components/AgentPanel";
+import ComplianceTable from "@/components/ComplianceTable";
 import ResultCard from "@/components/ResultCard";
 import RunStatus from "@/components/RunStatus";
 import { api, fmtDate, openReport, passRate, type ResultRow, type Run } from "@/lib/api";
@@ -94,6 +95,7 @@ export default function RunPage() {
         {Object.entries(s.averages).map(([k, v]) => <div key={k} className="card stat"><div className="n">{v}</div><div className="l">{k.replace("_", " ")} (avg /5)</div></div>)}
       </div>)}
 
+      <ComplianceTable rules={s?.compliance} />
       <AgentReport run={run} />
 
       {cmp && (<div className="card" style={{ marginBottom: 16 }}>

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import ComplianceTable, { type RuleVerdict } from "@/components/ComplianceTable";
 import ResultCard, { type CardRow } from "@/components/ResultCard";
 import { API } from "@/lib/api";
 
 type Shared = {
   agent: string; created_at: string; mode: string;
-  summary: { total: number; passed: number; failed: number; errors: number; averages: Record<string, number> } | null;
+  summary: { total: number; passed: number; failed: number; errors: number; averages: Record<string, number>; compliance?: RuleVerdict[] } | null;
   root_causes: { cause: string; severity: string; count: number }[];
   results: CardRow[];
 };
@@ -53,9 +54,10 @@ export default async function SharedReport({ params }: { params: Promise<{ token
       {s && (<div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", margin: "16px 0" }}>
         <div className="card stat"><div className="n">{rate}%</div><div className="l">Pass rate</div></div>
         <div className="card stat"><div className="n">{s.failed}</div><div className="l">Failed of {s.total}</div></div>
-        {Object.entries(s.averages).map(([k, v]) => <div key={k} className="card stat"><div className="n">{v}</div><div className="l">{k.replace("_", " ")} (avg /5)</div></div>)}
+        {Object.entries(s.averages).filter(([, v]) => typeof v === "number").map(([k, v]) => <div key={k} className="card stat"><div className="n">{v}</div><div className="l">{k.replace("_", " ")} (avg /5)</div></div>)}
       </div>)}
 
+      <ComplianceTable rules={s?.compliance} />
       {d.root_causes.length > 0 && (<div className="card" style={{ marginBottom: 16 }}>
         <h2>Why it fails</h2>
         {d.root_causes.map((c, i) => (

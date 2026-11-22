@@ -128,3 +128,30 @@ def test_usage_endpoint():
     u = client.get("/v1/usage", headers=h).json()
     assert u["used"] == 3 and u["runs"] == 1 and u["by_agent"][0] == {"agent": "EMI bot", "conversations": 3}
     assert u["remaining"] == u["limit"] - 3
+
+
+def test_compliance_pack_run():
+    from corella.compliance import PACKS
+    packs = client.get("/v1/compliance/packs").json()
+    assert {p["id"] for p in packs} >= {"rbi_recovery", "rbi_digital_lending", "dpdp_privacy", "fraud_safety"}
+    h = new_org("growth")
+    agent = client.post("/v1/agents", json=DEMO, headers=h).json()
+    r = client.post(f"/v1/agents/{agent['id']}/runs", json={"packs": ["rbi_recovery"], "max_turns": 2}, headers=h)
+    assert r.status_code == 202 and r.json()["conversations"] == len(PACKS["rbi_recovery"]["scenarios"])
+    worker.run_once()
+    run = client.get(f"/v1/runs/{r.json()['id']}", headers=h).json()
+    comp = run["summary"]["compliance"]
+    assert [c["id"] for c in comp] == [x["id"] for x in PACKS["rbi_recovery"]["rules"]]
+    assert all(c["status"] in ("passed", "violated", "not_tested") for c in comp)
+    bad = client.post(f"/v1/agents/{agent['id']}/runs", json={"packs": ["nope"]}, headers=h)
+    assert bad.status_code == 422
+
+
+def test_pack_scenarios_are_well_formed():
+    from corella.compliance import PACKS
+    ids = [s["id"] for p in PACKS.values() for s in p["scenarios"]]
+    assert len(ids) == len(set(ids))
+    for p in PACKS.values():
+        rule_ids = {r["id"] for r in p["rules"]}
+        tested = {rid for s in p["scenarios"] for rid in s["rules"]}
+        assert tested <= rule_ids and rule_ids <= tested, f"every rule needs a scenario: {rule_ids - tested}"

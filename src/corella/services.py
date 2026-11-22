@@ -139,12 +139,16 @@ def execute_run(db: Session, run: Run, llm=None) -> Run:
             sc = cfg.get("scenarios", 10)
             scenarios = ([eng.Scenario(**s) for s in sc] if isinstance(sc, list)
                          else eng.generate_scenarios(llm, desc, int(sc), cfg.get("personas")))
-            results = eng.run_suite(llm, target, scenarios, agent.rules, cfg.get("max_turns", 6), cfg.get("workers", 4))
+            rules = "\n\n".join(x for x in (agent.rules, cfg.get("extra_rules")) if x)
+            results = eng.run_suite(llm, target, scenarios, rules, cfg.get("max_turns", 6), cfg.get("workers", 4))
             used = len(results)
         for r in results:
             db.add(Result(run_id=run.id, organization_id=run.organization_id, scenario=r.scenario.__dict__,
                           transcript=r.transcript, score=r.score, passed=r.passed, error=r.error))
         run.summary, run.status, run.conversations = summary(results), "completed", used
+        if cfg.get("packs"):
+            from .compliance import rule_report
+            run.summary = {**run.summary, "compliance": rule_report(results, cfg["packs"])}
     except Exception as e:
         log.exception("run %s failed", run.id)
         run.status, run.error = "failed", f"{type(e).__name__}: {e}"

@@ -47,7 +47,8 @@ export type Me = {
   conversations_this_month: number;
 };
 export type Agent = { id: string; name: string; description: string; rules: string; target_type: string; target_url: string | null };
-export type Summary = { total: number; passed: number; failed: number; errors: number; averages: Record<string, number> };
+import type { RuleVerdict } from "@/components/ComplianceTable";
+export type Summary = { total: number; passed: number; failed: number; errors: number; averages: Record<string, number>; compliance?: RuleVerdict[] };
 export type Run = {
   id: string; agent_id: string; status: string; label: string | null; summary: Summary | null; conversations: number;
   error: string | null; baseline_run_id: string | null; created_at: string; finished_at: string | null;

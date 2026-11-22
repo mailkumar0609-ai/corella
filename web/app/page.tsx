@@ -20,8 +20,8 @@ const STEPS = [
 const COMPARE = [
   ["13 Indian languages and code-mixed speech (Hindi, Hinglish, Tamil, Telugu, Bengali…)", true, false],
   ["Indian number, date and currency formats tested", true, false],
-  ["BFSI compliance checks (lending, collections, insurance)", true, "Generic"],
-  ["Rupee pricing, GST invoices, UPI payments", true, false],
+  ["Ready-made RBI (recovery, digital lending) and DPDP compliance packs with rule-by-rule verdicts", true, "Generic"],
+  ["Rupee pricing, UPI and card payments", true, false],
   ["Autonomous agent that writes and verifies a fixed prompt", true, "Partial"],
   ["Regression re-runs and CI API", true, true],
   ["Free plan to start", true, "Varies"],

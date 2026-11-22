@@ -107,6 +107,7 @@ class RunIn(BaseModel):
     personas: list[str] | None = None
     max_turns: int = Field(default=6, ge=1, le=20)
     label: str | None = Field(default=None, max_length=200)
+    packs: list[str] | None = None  # compliance packs; their fixed scenarios replace `scenarios`
 
     @field_validator("scenarios")
     @classmethod
@@ -196,6 +197,13 @@ def me(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
                              "subscription_status": org.subscription_status, "webhook_url": org.webhook_url},
             "user": {"id": ctx.user.id, "email": ctx.user.email, "role": ctx.role} if ctx.user else None,
             "limits": PLANS[org.plan], "conversations_this_month": services.conversations_this_month(db, org.id)}
+
+
+@app.get("/v1/compliance/packs")
+def compliance_packs():
+    """Ready-made regulatory test suites (RBI recovery, RBI digital lending, DPDP, customer safety)."""
+    from .compliance import public_packs
+    return public_packs()
 
 
 @app.get("/v1/usage")
@@ -333,6 +341,14 @@ def create_run(agent_id: str, body: RunIn, ctx: Ctx = Depends(current_ctx), db: 
     cfg = body.model_dump(exclude_none=True)
     if body.mode == "autonomous" and isinstance(body.scenarios, list):
         raise HTTPException(422, "Autonomous mode takes a conversation budget (a number), not a scenario list")
+    if body.packs:
+        if body.mode == "autonomous":
+            raise HTTPException(422, "Compliance packs run in standard mode (fixed, replayable scenarios)")
+        from .compliance import expand
+        try:
+            cfg["scenarios"], cfg["extra_rules"] = expand(body.packs)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
     n = services.requested_count(cfg)
     quota_or_402(services.check_quota, db, ctx.org, n)
     run = Run(organization_id=ctx.org.id, agent_id=agent.id, config=cfg, conversations=n)  # reserve quota now
