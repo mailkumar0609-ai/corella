@@ -67,12 +67,17 @@ if settings.cors_origins:
 # ---------- schemas ----------
 
 class TargetSpec(BaseModel):
-    type: Literal["http", "openai", "prompt", "demo"]
+    type: Literal["http", "openai", "voice", "demo_voice", "prompt", "demo"]
     url: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)
     reply_field: str = "reply"
     body_template: dict | list | None = None  # http: request shape with {{message}}, {{messages}}, {{session_id}}
     model: str | None = Field(default=None, max_length=200)  # openai: model name
+    language: str = "hi-IN"                 # voice: language the simulated customer speaks
+    noise: Literal["clean", "street", "crowd", "bad_line"] = "clean"  # voice: background conditions
+    request_format: Literal["json", "multipart"] = "json"            # voice: how the audio is sent
+    reply_audio_field: str | None = "audio"                          # voice: base64 audio in the response
+    reply_text_field: str | None = None                              # voice: or the agent's reply as text
     system_prompt: str | None = Field(default=None, max_length=50_000)
 
 
@@ -206,6 +211,13 @@ def compliance_packs():
     return public_packs()
 
 
+@app.get("/v1/voice/options")
+def voice_options():
+    from .voice import LANGUAGES, NOISES
+    enabled = bool(settings.sarvam_api_key) or settings.voice_provider == "mock" or settings.env != "production"
+    return {"languages": LANGUAGES, "noise": NOISES, "enabled": enabled}
+
+
 @app.get("/v1/usage")
 def usage(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
     """This month's test conversations: total, by day and by agent (failed runs are not counted)."""
@@ -265,7 +277,11 @@ def set_webhook(body: WebhookIn, ctx: Ctx = Depends(require_owner), db: Session 
 # ---------- agents ----------
 
 def validate_target(t: TargetSpec) -> None:
-    if t.type in ("http", "openai"):
+    if t.type == "voice" or t.type == "demo_voice":
+        from .voice import LANGUAGES
+        if t.language not in LANGUAGES:
+            raise HTTPException(422, f"Voice language must be one of: {', '.join(LANGUAGES)}")
+    if t.type in ("http", "openai", "voice"):
         if not t.url:
             raise HTTPException(422, f"target.url is required for {t.type} targets")
         try:
@@ -286,15 +302,16 @@ def test_connection(t: TargetSpec, ctx: Ctx = Depends(current_ctx)):
     from .engine import TargetError, build_target
     from .llm import MockLLM
     validate_target(t)
-    if t.type in ("prompt", "demo"):
+    if t.type in ("prompt", "demo", "demo_voice"):
         return {"ok": True, "reply": None, "note": "Nothing to connect to: this agent runs inside Corella."}
     msg = "Namaste, mujhe apne account ke baare mein jaankari chahiye."
     start = time.monotonic()
     try:
         reply = build_target(t.model_dump(exclude_none=True), MockLLM(), settings.allow_private_targets).reply(
             [{"role": "user", "content": msg}], "corella-connection-test")
-    except (TargetError, UnsafeTarget) as e:
-        return {"ok": False, "error": str(e)}
+    except Exception as e:  # TargetError, UnsafeTarget, VoiceError…: show the reason, never a 500
+        return {"ok": False, "error": str(e) if isinstance(e, (TargetError, UnsafeTarget)) or "Voice" in type(e).__name__
+                else f"{type(e).__name__}: {str(e)[:200]}"}
     return {"ok": True, "sent": msg, "reply": reply[:2000], "latency_ms": int((time.monotonic() - start) * 1000)}
 
 

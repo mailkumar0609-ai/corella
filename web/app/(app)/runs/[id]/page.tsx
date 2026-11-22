@@ -95,6 +95,15 @@ export default function RunPage() {
         {Object.entries(s.averages).map(([k, v]) => <div key={k} className="card stat"><div className="n">{v}</div><div className="l">{k.replace("_", " ")} (avg /5)</div></div>)}
       </div>)}
 
+      {s?.voice && (<div className="card" style={{ marginBottom: 16 }}>
+        <h2>Voice</h2>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))" }}>
+          <div className="stat"><div className="n">{(s.voice.avg_latency_ms / 1000).toFixed(1)}s</div><div className="l">Avg response time</div></div>
+          <div className="stat"><div className="n">{(s.voice.p90_latency_ms / 1000).toFixed(1)}s</div><div className="l">90th percentile</div></div>
+          <div className="stat"><div className="n">{s.voice.slow_turns}</div><div className="l">Turns slower than 3s (of {s.voice.turns})</div></div>
+        </div>
+        <p className="hint" style={{ marginTop: 8 }}>Conditions: {s.voice.noise.map((x) => x.replace("_", " ")).join(", ") || "clean"}. Callers usually hang up or talk over an agent that takes more than 2–3 seconds to answer.</p>
+      </div>)}
       <ComplianceTable rules={s?.compliance} />
       <AgentReport run={run} />
 

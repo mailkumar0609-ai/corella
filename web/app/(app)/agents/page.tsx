@@ -7,6 +7,8 @@ import { api, type Agent } from "@/lib/api";
 
 const TARGETS = {
   demo: "Built-in demo agent (try Corella in one click)",
+  demo_voice: "Built-in demo voice agent (hear how noise changes what it understands)",
+  voice: "My voice agent (audio-in, audio-out API)",
   openai: "OpenAI-compatible API (OpenAI, Azure, Sarvam, OpenRouter, Groq, vLLM, LiteLLM…)",
   http: "My agent's own chat API (any HTTPS endpoint)",
   prompt: "Only a system prompt (no API yet)",
@@ -25,7 +27,8 @@ function NewAgent({ onDone }: { onDone: () => void }) {
   const router = useRouter();
   const [f, setF] = useState({ name: "", description: "", rules: "", type: "demo" as keyof typeof TARGETS,
     url: "", reply_field: "reply", auth: "", system_prompt: "", model: "", format: "history" as keyof typeof FORMATS,
-    template: '{"query": "{{message}}", "conversation_id": "{{session_id}}"}' });
+    template: '{"query": "{{message}}", "conversation_id": "{{session_id}}"}',
+    language: "hi-IN", noise: "street", request_format: "json", reply_kind: "audio", reply_audio_field: "audio", reply_text_field: "text" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
@@ -49,6 +52,11 @@ function NewAgent({ onDone }: { onDone: () => void }) {
       headers: auth ? { authorization: auth.toLowerCase().startsWith("bearer ") ? auth : `Bearer ${auth}` } : {},
       ...(f.system_prompt ? { system_prompt: f.system_prompt } : {}) });
     if (f.type === "prompt") target.system_prompt = f.system_prompt;
+    if (f.type === "voice" || f.type === "demo_voice") Object.assign(target, { language: f.language, noise: f.noise });
+    if (f.type === "voice") Object.assign(target, { url: f.url, request_format: f.request_format,
+      headers: auth ? { authorization: auth } : {},
+      reply_audio_field: f.reply_kind === "audio" ? f.reply_audio_field : null,
+      reply_text_field: f.reply_kind === "text" ? f.reply_text_field : null });
     return target;
   }
 
@@ -72,7 +80,11 @@ function NewAgent({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const remote = f.type === "http" || f.type === "openai";
+  const remote = f.type === "http" || f.type === "openai" || f.type === "voice";
+  const LANGS: Record<string, string> = { "hi-IN": "Hindi / Hinglish", "en-IN": "Indian English", "bn-IN": "Bengali", "mr-IN": "Marathi",
+    "ta-IN": "Tamil", "te-IN": "Telugu", "kn-IN": "Kannada", "ml-IN": "Malayalam", "gu-IN": "Gujarati", "pa-IN": "Punjabi", "od-IN": "Odia" };
+  const NOISE: Record<string, string> = { clean: "Quiet room", street: "Busy street (traffic, horns)",
+    crowd: "Crowded market / office (background voices)", bad_line: "Weak mobile network (narrowband, dropouts)" };
   return (
     <form className="card" onSubmit={submit} style={{ marginTop: 16 }}>
       <h2>Add an agent</h2>
@@ -113,6 +125,35 @@ function NewAgent({ onDone }: { onDone: () => void }) {
         <input value={f.reply_field} onChange={set("reply_field")} />
         <label>Authorization header <span className="hint">Optional. Encrypted at rest and never shown again.</span></label>
         <input type="password" value={f.auth} onChange={set("auth")} placeholder="Bearer sk_..." autoComplete="off" />
+      </>)}
+
+      {(f.type === "voice" || f.type === "demo_voice") && (<>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+          <div><label>Caller speaks</label>
+            <select value={f.language} onChange={set("language")}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+          <div><label>Call conditions</label>
+            <select value={f.noise} onChange={set("noise")}>{Object.entries(NOISE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+        </div>
+        <p className="hint">Each customer turn is spoken with an Indian-accent voice, mixed with this background noise, and sent to the agent. We transcribe the reply and time every turn.</p>
+      </>)}
+      {f.type === "voice" && (<>
+        <label>Voice endpoint URL <span className="hint">One request per turn: 16 kHz mono WAV in, reply audio (or text) out.</span></label>
+        <input required type="url" value={f.url} onChange={set("url")} placeholder="https://voice.yourcompany.com/turn" />
+        <label>How we send the audio</label>
+        <select value={f.request_format} onChange={set("request_format")}>
+          <option value="json">JSON: {"{"}&quot;audio&quot;: base64 WAV, &quot;session_id&quot;, &quot;language&quot;{"}"}</option>
+          <option value="multipart">Multipart form upload (file field &quot;audio&quot;)</option>
+        </select>
+        <label>Agent replies with</label>
+        <select value={f.reply_kind} onChange={set("reply_kind")}>
+          <option value="audio">Audio (base64 WAV in the JSON response)</option>
+          <option value="text">Text</option>
+        </select>
+        {f.reply_kind === "audio"
+          ? <><label>Reply audio field <span className="hint">e.g. audio or data.audio_base64</span></label><input value={f.reply_audio_field} onChange={set("reply_audio_field")} /></>
+          : <><label>Reply text field</label><input value={f.reply_text_field} onChange={set("reply_text_field")} /></>}
+        <label>Authorization header <span className="hint">Optional. Encrypted at rest and never shown again.</span></label>
+        <input type="password" value={f.auth} onChange={set("auth")} placeholder="Bearer ..." autoComplete="off" />
       </>)}
 
       {f.type === "prompt" && (<>

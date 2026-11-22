@@ -8,7 +8,7 @@ export type CardRow = {
   passed: boolean; error: string | boolean | null;
   scenario: { id: string; goal: string; persona: string; success?: string };
   score: Record<string, any> & { failures?: Failure[]; summary?: string };
-  transcript: { role: "customer" | "agent"; content: string }[];
+  transcript: { role: "customer" | "agent"; content: string; latency_ms?: number; agent_heard?: string; noise?: string }[];
 };
 
 export default function ResultCard({ r }: { r: CardRow }) {
@@ -31,7 +31,12 @@ export default function ResultCard({ r }: { r: CardRow }) {
         <div style={{ marginTop: 10 }}>
           {r.transcript.map((t, i) => {
             if (t.role === "agent") n++;
-            return <div key={i} className={`msg ${t.role} ${t.role === "agent" && bad.has(n) ? "flag" : ""}`}><span className="who">{t.role}</span>{t.content}</div>;
+            return (<div key={i}>
+              {t.agent_heard !== undefined && <div className="hint" style={{ margin: "2px 0 2px", fontStyle: "italic" }}>Agent heard: &ldquo;{t.agent_heard || "(nothing)"}&rdquo;</div>}
+              <div className={`msg ${t.role} ${t.role === "agent" && bad.has(n) ? "flag" : ""}`}><span className="who">{t.role}
+                {t.latency_ms !== undefined && <span className={`badge ${t.latency_ms > 3000 ? "bad" : t.latency_ms > 1500 ? "warn" : "ok"}`} style={{ marginLeft: 6, fontSize: 11 }}>{(t.latency_ms / 1000).toFixed(1)}s</span>}
+              </span>{t.content}</div>
+            </div>);
           })}
         </div>
       </div>)}

@@ -26,6 +26,8 @@ services:
         sync: false
       - key: CORELLA_ENCRYPTION_KEY   # encrypts customers' agent credentials; Render generates it once
         generateValue: true
+      - key: SARVAM_API_KEY            # voice testing: Indian-language TTS/STT (dashboard.sarvam.ai)
+        sync: false
       - key: SUPABASE_URL
         value: https://ejotnookcdpsgbkncjcw.supabase.co
       - key: SUPABASE_ANON_KEY

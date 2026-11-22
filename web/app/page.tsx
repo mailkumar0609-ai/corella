@@ -20,6 +20,7 @@ const STEPS = [
 const COMPARE = [
   ["13 Indian languages and code-mixed speech (Hindi, Hinglish, Tamil, Telugu, Bengali…)", true, false],
   ["Indian number, date and currency formats tested", true, false],
+  ["Voice testing with Indian-accent callers, street, crowd and weak-network noise, and response-time checks", true, "Partial"],
   ["Ready-made RBI (recovery, digital lending) and DPDP compliance packs with rule-by-rule verdicts", true, "Generic"],
   ["Rupee pricing, UPI and card payments", true, false],
   ["Autonomous agent that writes and verifies a fixed prompt", true, "Partial"],

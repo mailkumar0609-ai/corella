@@ -48,7 +48,8 @@ export type Me = {
 };
 export type Agent = { id: string; name: string; description: string; rules: string; target_type: string; target_url: string | null };
 import type { RuleVerdict } from "@/components/ComplianceTable";
-export type Summary = { total: number; passed: number; failed: number; errors: number; averages: Record<string, number>; compliance?: RuleVerdict[] };
+export type Summary = { total: number; passed: number; failed: number; errors: number; averages: Record<string, number>; compliance?: RuleVerdict[];
+  voice?: { turns: number; avg_latency_ms: number; p90_latency_ms: number; slow_turns: number; noise: string[] } };
 export type Run = {
   id: string; agent_id: string; status: string; label: string | null; summary: Summary | null; conversations: number;
   error: string | null; baseline_run_id: string | null; created_at: string; finished_at: string | null;
@@ -68,7 +69,7 @@ export type ResultRow = {
   id: string; passed: boolean; error: string | null;
   scenario: { id: string; goal: string; persona: string; opening: string; success: string };
   score: Record<string, any> & { failures?: Failure[]; summary?: string };
-  transcript: { role: "customer" | "agent"; content: string }[];
+  transcript: { role: "customer" | "agent"; content: string; latency_ms?: number; agent_heard?: string; noise?: string }[];
 };
 
 export const fmtDate = (s: string) => new Date(s.endsWith("Z") || s.includes("+") ? s : s + "Z").toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });

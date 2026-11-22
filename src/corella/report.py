@@ -12,8 +12,15 @@ METRICS = ["task_success", "accuracy", "compliance", "language_handling", "tone"
 def summary(results) -> dict:
     scored = [r for r in results if r.score]
     avg = {m: round(sum(r.score.get(m, 0) for r in scored) / len(scored), 2) if scored else 0 for m in METRICS}
-    return {"total": len(results), "passed": sum(r.passed for r in results),
-            "failed": sum(not r.passed for r in results), "errors": sum(bool(r.error) for r in results), "averages": avg}
+    out = {"total": len(results), "passed": sum(r.passed for r in results),
+           "failed": sum(not r.passed for r in results), "errors": sum(bool(r.error) for r in results), "averages": avg}
+    lat = sorted(t["latency_ms"] for r in results for t in r.transcript if t.get("role") == "agent" and "latency_ms" in t)
+    if lat:  # voice run: response-time stats per agent turn
+        out["voice"] = {"turns": len(lat), "avg_latency_ms": int(sum(lat) / len(lat)),
+                        "p90_latency_ms": lat[min(len(lat) - 1, int(len(lat) * 0.9))],
+                        "slow_turns": sum(x > 3000 for x in lat),
+                        "noise": sorted({t.get("noise") for r in results for t in r.transcript if t.get("noise")})}
+    return out
 
 
 def to_json(results, path: str, meta: dict):

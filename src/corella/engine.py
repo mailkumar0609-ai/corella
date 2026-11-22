@@ -135,6 +135,16 @@ def build_target(spec: dict, llm: LLM, allow_private: bool = False) -> Target:
         return LLMTarget(llm, spec["system_prompt"])
     if kind == "demo":
         return DemoEmiBot()
+    if kind in ("voice", "demo_voice"):
+        from .voice import DemoVoiceTarget, VoiceHttpTarget, get_voice
+        voice = get_voice()
+        if kind == "demo_voice":
+            return DemoVoiceTarget(voice, spec.get("language", "hi-IN"), spec.get("noise", "street"))
+        from .security import check_target_url
+        check_target_url(spec["url"], allow_private)
+        return VoiceHttpTarget(spec["url"], voice, spec.get("headers"), spec.get("language", "hi-IN"),
+                               spec.get("noise", "clean"), spec.get("request_format", "json"),
+                               spec.get("reply_audio_field") or None, spec.get("reply_text_field") or None)
     raise ValueError(f"Unknown target type '{kind}'")
 
 
@@ -190,7 +200,10 @@ def simulate(llm: LLM, target: Target, sc: Scenario, max_turns: int = 6) -> list
     session = f"corella-{uuid.uuid4().hex[:16]}"  # one id per test conversation, for agents that keep state
     for _ in range(max_turns):
         agent_view = [{"role": "user" if t["role"] == "customer" else "assistant", "content": t["content"]} for t in transcript]
-        transcript.append({"role": "agent", "content": target.reply(agent_view, session)})
+        out = target.reply(agent_view, session)
+        turn = {"role": "agent", "content": str(out)}
+        turn.update(getattr(out, "meta", None) or {})  # voice targets add latency_ms, noise, agent_heard…
+        transcript.append(turn)
         # from the simulator's point of view the agent is the 'user'
         sim_view = [{"role": "user", "content": "(Call connected. Start the conversation.)"}] + [
             {"role": "assistant" if t["role"] == "customer" else "user", "content": t["content"]} for t in transcript]

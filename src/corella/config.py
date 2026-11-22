@@ -31,6 +31,11 @@ class Settings:
     max_scenarios_per_run: int = field(default_factory=lambda: int(_env("CORELLA_MAX_SCENARIOS", "200")))
     # Encrypts customers' agent credentials and prompts at rest. Any long random string; never change it once set.
     encryption_key: str = field(default_factory=lambda: _env("CORELLA_ENCRYPTION_KEY"))
+    # Voice testing (Sarvam AI speech for Indian languages). Without a key, voice runs use an offline mock.
+    sarvam_api_key: str = field(default_factory=lambda: _env("SARVAM_API_KEY"))
+    voice_provider: str = field(default_factory=lambda: _env("CORELLA_VOICE"))
+    sarvam_tts_model: str = field(default_factory=lambda: _env("SARVAM_TTS_MODEL", "bulbul:v3"))
+    sarvam_stt_model: str = field(default_factory=lambda: _env("SARVAM_STT_MODEL", "saaras:v4"))
     supabase_url: str = field(default_factory=lambda: _env("SUPABASE_URL").rstrip("/"))
     supabase_anon_key: str = field(default_factory=lambda: _env("SUPABASE_ANON_KEY"))
     razorpay_key_id: str = field(default_factory=lambda: _env("RAZORPAY_KEY_ID"))
