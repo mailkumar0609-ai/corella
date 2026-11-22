@@ -88,11 +88,11 @@ export default function Home() {
               <p style={{ fontSize: 26, fontWeight: 700, margin: 0 }}>{p.price}<span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>{p.per}</span></p>
               <ul style={{ paddingLeft: 18 }}>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
               {p.id === "enterprise"
-                ? <a className="btn" href="mailto:sales@corella.live?subject=Corella%20Enterprise">Talk to us</a>
+                ? <a className="btn" href="mailto:hello@corella.live?subject=Corella%20Enterprise">Talk to us</a>
                 : <Link className={`btn ${p.id === "growth" ? "primary" : ""}`} href="/login">{p.id === "trial" ? "Start free" : "Start free, upgrade anytime"}</Link>}
             </div>))}
         </div>
-        <p className="muted" style={{ fontSize: 13 }}>Prices exclude 18% GST. One-time pre-launch audits from ₹50,000.</p>
+        <p className="muted" style={{ fontSize: 13 }}>Prices in INR; GST added only where applicable. One-time pre-launch audits from ₹50,000.</p>
       </section>
 
       <section className="card" style={{ margin: "32px 0", textAlign: "center", padding: 36 }}>

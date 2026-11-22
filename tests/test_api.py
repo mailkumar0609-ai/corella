@@ -118,3 +118,13 @@ def test_connection_endpoint_validates():
     assert r.status_code == 422  # model required
     r = client.post("/v1/agents/test-connection", json={"type": "demo"}, headers=h)
     assert r.json()["ok"] is True
+
+
+def test_usage_endpoint():
+    h = new_org("growth")
+    agent = client.post("/v1/agents", json=DEMO, headers=h).json()
+    client.post(f"/v1/agents/{agent['id']}/runs", json={"scenarios": 3, "max_turns": 3}, headers=h)
+    worker.run_once()
+    u = client.get("/v1/usage", headers=h).json()
+    assert u["used"] == 3 and u["runs"] == 1 and u["by_agent"][0] == {"agent": "EMI bot", "conversations": 3}
+    assert u["remaining"] == u["limit"] - 3

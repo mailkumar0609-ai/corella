@@ -52,11 +52,23 @@ export default function Settings() {
           <input style={{ maxWidth: 260 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Key name, e.g. github-ci" />
           <button className="btn primary">Create key</button>
         </form>}
-        <h3 style={{ marginTop: 20 }}>Run a test from CI</h3>
-        <pre className="card mono" style={{ overflowX: "auto", margin: 0 }}>{`curl -X POST ${API_URL}/v1/agents/AGENT_ID/runs \\
-  -H "Authorization: Bearer $CORELLA_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"scenarios": 20, "label": "commit $GIT_SHA"}'`}</pre>
+        <h3 style={{ marginTop: 20 }}>Block bad releases in CI</h3>
+        <p className="muted" style={{ fontSize: 14 }}>Add this GitHub Actions workflow (works the same in GitLab or Jenkins). It tests your agent on every pull request,
+          fails the check if the pass rate drops below your minimum or a previously passing conversation breaks, and links the report.
+          Save your key as the repository secret <span className="mono">CORELLA_API_KEY</span>.</p>
+        <pre className="card mono" style={{ overflowX: "auto", margin: 0, fontSize: 13 }}>{`# .github/workflows/corella.yml
+name: Corella agent test
+on: [pull_request]
+jobs:
+  corella:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsSL https://corella.live/ci.sh | bash
+        env:
+          CORELLA_API_KEY: \${{ secrets.CORELLA_API_KEY }}
+          CORELLA_AGENT_ID: AGENT_ID        # from the agent's page
+          CORELLA_MIN_PASS_RATE: 80         # fail below this %
+          # CORELLA_BASELINE_RUN: RUN_ID    # paid plans: replay a known-good run, fail on anything newly broken`}</pre>
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>

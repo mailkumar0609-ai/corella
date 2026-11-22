@@ -198,6 +198,27 @@ def me(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
             "limits": PLANS[org.plan], "conversations_this_month": services.conversations_this_month(db, org.id)}
 
 
+@app.get("/v1/usage")
+def usage(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    """This month's test conversations: total, by day and by agent (failed runs are not counted)."""
+    from datetime import datetime, timezone
+    start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    runs = db.scalars(select(Run).where(Run.organization_id == ctx.org.id, Run.created_at >= start,
+                                        Run.status != "failed")).all()
+    names = {a.id: a.name for a in db.scalars(select(Agent).where(Agent.organization_id == ctx.org.id))}
+    by_day, by_agent = {}, {}
+    for r in runs:
+        d = r.created_at.date().isoformat()
+        by_day[d] = by_day.get(d, 0) + (r.conversations or 0)
+        k = names.get(r.agent_id, r.agent_id)
+        by_agent[k] = by_agent.get(k, 0) + (r.conversations or 0)
+    limit = PLANS[ctx.org.plan]["monthly_conversations"]
+    used = sum(by_day.values())
+    return {"period_start": start.date().isoformat(), "used": used, "limit": limit, "remaining": max(limit - used, 0),
+            "runs": len(runs), "by_day": [{"date": k, "conversations": v} for k, v in sorted(by_day.items())],
+            "by_agent": [{"agent": k, "conversations": v} for k, v in sorted(by_agent.items(), key=lambda x: -x[1])]}
+
+
 @app.get("/v1/api-keys")
 def list_keys(ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
     keys = db.scalars(select(ApiKey).where(ApiKey.organization_id == ctx.org.id).order_by(ApiKey.created_at))
