@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import InstallApp from "@/components/InstallApp";
 import { api, ApiError, supabase, type Me } from "@/lib/api";
 
 const MeCtx = createContext<{ me: Me; refresh: () => Promise<void> } | null>(null);
@@ -46,6 +47,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="grow muted" style={{ fontSize: 13, padding: "0 10px" }}>
             {me.organization.name}<br /><span className="badge">{me.organization.plan}</span>
           </div>
+          <InstallApp className="nav" />
           <a className="nav" href="#" onClick={async (e) => { e.preventDefault(); await supabase.auth.signOut(); router.replace("/login"); }}>Sign out</a>
         </nav>
         <main className="main">{children}</main>

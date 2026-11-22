@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InstallApp from "@/components/InstallApp";
 import { PLANS } from "@/lib/plans";
 
 const FAILS = [
@@ -35,7 +36,7 @@ export default function Home() {
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}>
       <header className="spread" style={{ padding: "18px 0" }}>
         <Link href="/" className="brand" style={{ margin: 0 }}><span className="dot" />Corella</Link>
-        <nav className="row"><a href="#pricing" className="muted">Pricing</a><Link href="/login" className="btn">Sign in</Link></nav>
+        <nav className="row"><a href="#pricing" className="muted">Pricing</a><InstallApp /><Link href="/login" className="btn">Sign in</Link></nav>
       </header>
 
       <section style={{ padding: "64px 0 40px", maxWidth: 760 }}>

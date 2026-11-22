@@ -56,8 +56,9 @@ tr.link { cursor: pointer; } tr.link:hover td { background: var(--soft); }
 /* app shell */
 .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
 .side { border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
-.side a.nav { padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--muted); font-weight: 550; }
-.side a.nav.on, .side a.nav:hover { background: var(--soft); color: var(--ink); }
+.side a.nav, .side button.nav { padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--muted); font-weight: 550; }
+.side button.nav { background: none; border: 0; font: inherit; font-weight: 550; text-align: left; cursor: pointer; width: 100%; white-space: nowrap; }
+.side a.nav.on, .side a.nav:hover, .side button.nav:hover { background: var(--soft); color: var(--ink); }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 750; font-size: 18px; margin: 0 6px 18px; text-decoration: none; }
 .brand .dot { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 40%, var(--accent) 0 30%, var(--ink) 31%); }
 .main { padding: 28px 32px; max-width: 1100px; width: 100%; }
