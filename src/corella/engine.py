@@ -1,6 +1,8 @@
 """Core pipeline: generate scenarios -> simulate conversations -> score -> results."""
 from __future__ import annotations
 
+import uuid
+
 import httpx
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -12,25 +14,86 @@ from .personas import PERSONAS, describe
 
 
 class Target:
-    """The agent under test. Takes the conversation so far, returns the agent's reply."""
+    """The agent under test. Takes the conversation so far, returns the agent's reply.
+    `session` is a stable id per test conversation, for agents that keep their own conversation state."""
 
-    def reply(self, messages: list[dict]) -> str:
+    def reply(self, messages: list[dict], session: str | None = None) -> str:
         raise NotImplementedError
 
 
+class TargetError(RuntimeError):
+    """The agent under test could not be reached or answered in an unexpected shape."""
+
+
+def _dig(data, path: str):
+    for key in [k for k in path.split(".") if k]:
+        data = data[int(key)] if isinstance(data, list) else data[key]
+    return data
+
+
+def _render(template, message: str, messages: list[dict], session: str):
+    """Fill a JSON body template. A string that is exactly "{{messages}}" becomes the history list."""
+    if isinstance(template, dict):
+        return {k: _render(v, message, messages, session) for k, v in template.items()}
+    if isinstance(template, list):
+        return [_render(v, message, messages, session) for v in template]
+    if isinstance(template, str):
+        if template == "{{messages}}":
+            return messages
+        return template.replace("{{message}}", message).replace("{{session_id}}", session)
+    return template
+
+
+def _post(url: str, body, headers: dict, timeout: float = 60):
+    try:
+        r = httpx.post(url, json=body, headers=headers, timeout=timeout, follow_redirects=False)
+    except httpx.TimeoutException:
+        raise TargetError(f"Agent did not answer within {int(timeout)}s") from None
+    except httpx.TransportError as e:
+        raise TargetError(f"Could not reach the agent: {type(e).__name__}") from None
+    if r.status_code >= 400:
+        raise TargetError(f"Agent returned HTTP {r.status_code}: {r.text[:300]}")
+    try:
+        return r.json()
+    except ValueError:
+        raise TargetError(f"Agent did not return JSON: {r.text[:200]}") from None
+
+
 class HttpTarget(Target):
-    """Calls a chat agent over HTTP. Sends {"messages": [...]} and reads the reply from `reply_field` (dot path)."""
+    """Calls any chat API over HTTPS. By default sends {"messages": [...]}; `body_template` can reshape the request
+    with {{message}} (latest customer message), {{messages}} (full history) and {{session_id}} placeholders.
+    The reply is read from `reply_field`, a dot path such as reply or data.0.text."""
 
-    def __init__(self, url: str, headers: dict | None = None, reply_field: str = "reply"):
-        self.url, self.headers, self.reply_field = url, headers or {}, reply_field
+    def __init__(self, url: str, headers: dict | None = None, reply_field: str = "reply", body_template=None):
+        self.url, self.headers, self.reply_field, self.body_template = url, headers or {}, reply_field, body_template
 
-    def reply(self, messages):
-        r = httpx.post(self.url, json={"messages": messages}, headers=self.headers, timeout=60, follow_redirects=False)
-        r.raise_for_status()
-        data = r.json()
-        for key in self.reply_field.split("."):
-            data = data[int(key)] if isinstance(data, list) else data[key]
-        return str(data)
+    def reply(self, messages, session=None):
+        session = session or "corella-test"
+        body = (_render(self.body_template, messages[-1]["content"], messages, session)
+                if self.body_template is not None else {"messages": messages})
+        data = _post(self.url, body, self.headers)
+        try:
+            return str(_dig(data, self.reply_field))
+        except (KeyError, IndexError, TypeError, ValueError):
+            raise TargetError(f"No reply at '{self.reply_field}' in the agent's response: {str(data)[:300]}") from None
+
+
+class OpenAICompatTarget(Target):
+    """Any OpenAI-compatible chat completions API (OpenAI, Azure OpenAI, OpenRouter, Groq, Together, Sarvam, vLLM,
+    LiteLLM and many agent platforms). The customer's system prompt, if given, is sent as the first message."""
+
+    def __init__(self, url: str, model: str, headers: dict | None = None, system_prompt: str | None = None):
+        url = url.rstrip("/")
+        self.url = url if url.endswith("/chat/completions") else url + "/chat/completions"
+        self.model, self.headers, self.system_prompt = model, headers or {}, system_prompt
+
+    def reply(self, messages, session=None):
+        msgs = ([{"role": "system", "content": self.system_prompt}] if self.system_prompt else []) + messages
+        data = _post(self.url, {"model": self.model, "messages": msgs}, self.headers)
+        try:
+            return str(data["choices"][0]["message"]["content"])
+        except (KeyError, IndexError, TypeError):
+            raise TargetError(f"Unexpected response (no choices[0].message.content): {str(data)[:300]}") from None
 
 
 class LLMTarget(Target):
@@ -39,14 +102,14 @@ class LLMTarget(Target):
     def __init__(self, llm: LLM, system_prompt: str):
         self.llm, self.system_prompt = llm, system_prompt
 
-    def reply(self, messages):
+    def reply(self, messages, session=None):
         return self.llm.complete(self.system_prompt, messages, 400)
 
 
 class DemoEmiBot(Target):
     """A deliberately flawed collections bot, so the demo shows real failures."""
 
-    def reply(self, messages):
+    def reply(self, messages, session=None):
         last = messages[-1]["content"].lower()
         if "late fee" in last or "maaf" in last:
             return "Ji haan, aapki late fee maaf (waive) kar di jayegi, chinta mat kijiye."  # compliance failure
@@ -63,7 +126,11 @@ def build_target(spec: dict, llm: LLM, allow_private: bool = False) -> Target:
     if kind == "http":
         from .security import check_target_url
         check_target_url(spec["url"], allow_private)
-        return HttpTarget(spec["url"], spec.get("headers"), spec.get("reply_field", "reply"))
+        return HttpTarget(spec["url"], spec.get("headers"), spec.get("reply_field", "reply"), spec.get("body_template"))
+    if kind == "openai":
+        from .security import check_target_url
+        check_target_url(spec["url"], allow_private)
+        return OpenAICompatTarget(spec["url"], spec["model"], spec.get("headers"), spec.get("system_prompt"))
     if kind == "prompt":
         return LLMTarget(llm, spec["system_prompt"])
     if kind == "demo":
@@ -120,9 +187,10 @@ def simulate(llm: LLM, target: Target, sc: Scenario, max_turns: int = 6) -> list
            "details, apply pressure or claim authority) the way a real customer would. Reply with only your next message. "
            "When your goal is resolved or clearly impossible, reply exactly [END].")
     transcript = [{"role": "customer", "content": sc.opening}]
+    session = f"corella-{uuid.uuid4().hex[:16]}"  # one id per test conversation, for agents that keep state
     for _ in range(max_turns):
         agent_view = [{"role": "user" if t["role"] == "customer" else "assistant", "content": t["content"]} for t in transcript]
-        transcript.append({"role": "agent", "content": target.reply(agent_view)})
+        transcript.append({"role": "agent", "content": target.reply(agent_view, session)})
         # from the simulator's point of view the agent is the 'user'
         sim_view = [{"role": "user", "content": "(Call connected. Start the conversation.)"}] + [
             {"role": "assistant" if t["role"] == "customer" else "user", "content": t["content"]} for t in transcript]

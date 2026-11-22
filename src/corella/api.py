@@ -67,10 +67,12 @@ if settings.cors_origins:
 # ---------- schemas ----------
 
 class TargetSpec(BaseModel):
-    type: Literal["http", "prompt", "demo"]
+    type: Literal["http", "openai", "prompt", "demo"]
     url: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)
     reply_field: str = "reply"
+    body_template: dict | list | None = None  # http: request shape with {{message}}, {{messages}}, {{session_id}}
+    model: str | None = Field(default=None, max_length=200)  # openai: model name
     system_prompt: str | None = Field(default=None, max_length=50_000)
 
 
@@ -141,7 +143,8 @@ def run_out(r: Run) -> dict:
             "summary": r.summary, "conversations": r.conversations, "error": r.error,
             "baseline_run_id": r.baseline_run_id, "mode": (r.config or {}).get("mode", "standard"),
             "agent_report": r.agent_report, "events": r.events or [], "created_at": r.created_at,
-            "started_at": r.started_at, "finished_at": r.finished_at}
+            "started_at": r.started_at, "finished_at": r.finished_at,
+            "share_url": f"{settings.app_url}/r/{r.share_token}" if r.share_token else None}
 
 
 def own(db: Session, model, id_: str, org: Organization):
@@ -232,18 +235,44 @@ def set_webhook(body: WebhookIn, ctx: Ctx = Depends(require_owner), db: Session 
 
 # ---------- agents ----------
 
-@app.post("/v1/agents", response_model=AgentOut, status_code=201)
-def create_agent(body: AgentIn, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
-    t = body.target
-    if t.type == "http":
+def validate_target(t: TargetSpec) -> None:
+    if t.type in ("http", "openai"):
         if not t.url:
-            raise HTTPException(422, "target.url is required for http targets")
+            raise HTTPException(422, f"target.url is required for {t.type} targets")
         try:
             check_target_url(t.url, settings.allow_private_targets)
         except UnsafeTarget as e:
             raise HTTPException(422, str(e))
+    if t.type == "openai" and not t.model:
+        raise HTTPException(422, "target.model is required for OpenAI-compatible targets")
     if t.type == "prompt" and not t.system_prompt:
         raise HTTPException(422, "target.system_prompt is required for prompt targets")
+
+
+@app.post("/v1/agents/test-connection")
+def test_connection(t: TargetSpec, ctx: Ctx = Depends(current_ctx)):
+    """Send one customer message to the agent and show what came back, before saving it."""
+    import time
+
+    from .engine import TargetError, build_target
+    from .llm import MockLLM
+    validate_target(t)
+    if t.type in ("prompt", "demo"):
+        return {"ok": True, "reply": None, "note": "Nothing to connect to: this agent runs inside Corella."}
+    msg = "Namaste, mujhe apne account ke baare mein jaankari chahiye."
+    start = time.monotonic()
+    try:
+        reply = build_target(t.model_dump(exclude_none=True), MockLLM(), settings.allow_private_targets).reply(
+            [{"role": "user", "content": msg}], "corella-connection-test")
+    except (TargetError, UnsafeTarget) as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "sent": msg, "reply": reply[:2000], "latency_ms": int((time.monotonic() - start) * 1000)}
+
+
+@app.post("/v1/agents", response_model=AgentOut, status_code=201)
+def create_agent(body: AgentIn, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    t = body.target
+    validate_target(t)
     quota_or_402(services.check_agent_limit, db, ctx.org)
     try:
         sealed = encrypt_target(t.model_dump(exclude_none=True))
@@ -343,6 +372,46 @@ def get_results(run_id: str, failed_only: bool = False, ctx: Ctx = Depends(curre
         q = q.where(Result.passed.is_(False))
     return [{"id": r.id, "scenario": r.scenario, "passed": r.passed, "score": r.score,
              "transcript": r.transcript, "error": r.error} for r in db.scalars(q)]
+
+
+@app.post("/v1/runs/{run_id}/share")
+def share_run(run_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    """Create a public, read-only link to this run's results (no login needed to view)."""
+    import secrets
+    run = own(db, Run, run_id, ctx.org)
+    if run.status != "completed":
+        raise HTTPException(409, "Only completed runs can be shared")
+    if not run.share_token:
+        run.share_token = secrets.token_urlsafe(18)
+        db.commit()
+    return {"share_url": f"{settings.app_url}/r/{run.share_token}"}
+
+
+@app.delete("/v1/runs/{run_id}/share", status_code=204)
+def unshare_run(run_id: str, ctx: Ctx = Depends(current_ctx), db: Session = Depends(get_db)):
+    run = own(db, Run, run_id, ctx.org)
+    run.share_token = None
+    db.commit()
+
+
+@app.get("/v1/public/reports/{token}")
+def public_report(token: str, db: Session = Depends(get_db)):
+    """Shared report. Deliberately leaves out the agent's prompt, rules, credentials, patched prompt and usage."""
+    run = db.scalar(select(Run).where(Run.share_token == token)) if len(token) >= 16 else None
+    if not run or run.status != "completed":
+        raise HTTPException(404, "This report link is invalid or was turned off")
+    agent = db.get(Agent, run.agent_id)
+    rep = run.agent_report or {}
+    keep = ("task_success", "accuracy", "compliance", "language_handling", "tone", "summary", "failures")
+    return {
+        "agent": agent.name if agent else "AI agent", "created_at": run.created_at, "finished_at": run.finished_at,
+        "mode": (run.config or {}).get("mode", "standard"), "summary": run.summary,
+        "root_causes": [{"cause": c.get("cause"), "severity": c.get("severity"), "count": len(c.get("scenario_ids") or [])}
+                        for c in rep.get("root_causes", [])],
+        "results": [{"scenario": {k: r.scenario.get(k) for k in ("id", "goal", "persona")}, "passed": r.passed,
+                     "error": bool(r.error), "score": {k: (r.score or {}).get(k) for k in keep},
+                     "transcript": r.transcript} for r in run.results],
+    }
 
 
 @app.get("/v1/runs/{run_id}/report", response_class=HTMLResponse)

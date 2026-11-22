@@ -4,40 +4,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMe } from "@/components/AppShell";
 import { AgentLog, AgentReport } from "@/components/AgentPanel";
+import ResultCard from "@/components/ResultCard";
 import RunStatus from "@/components/RunStatus";
 import { api, fmtDate, openReport, passRate, type ResultRow, type Run } from "@/lib/api";
 
 type Compare = { regressed: string[]; fixed: string[]; unchanged: number; new: string[]; pass_rate: number; baseline_pass_rate: number };
-const METRICS = ["task_success", "accuracy", "compliance", "language_handling", "tone"];
-
-function ResultCard({ r }: { r: ResultRow }) {
-  const [open, setOpen] = useState(!r.passed);
-  const bad = new Set((r.score.failures || []).map((f) => f.turn));
-  let n = 0;
-  return (
-    <div className="card">
-      <div className="spread" style={{ cursor: "pointer" }} onClick={() => setOpen(!open)}>
-        <div><span className={`badge ${r.error ? "warn" : r.passed ? "ok" : "bad"}`}>{r.error ? "Error" : r.passed ? "Pass" : "Fail"}</span>{" "}
-          <b>{r.scenario.id.replace(/_/g, " ")}</b> <span className="muted">· {r.scenario.persona.replace(/_/g, " ")}</span></div>
-        <span className="muted">{r.score.summary || r.error}</span>
-      </div>
-      {open && (<div style={{ marginTop: 12 }}>
-        <p className="muted" style={{ fontSize: 14 }}><b>Goal:</b> {r.scenario.goal}<br /><b>Expected:</b> {r.scenario.success}</p>
-        <div className="row">{METRICS.map((m) => <span key={m} className="badge">{m.replace("_", " ")} {r.score[m] ?? "–"}/5</span>)}</div>
-        {(r.score.failures || []).map((f, i) => (
-          <div key={i} className="fix"><b>{f.category}</b> · agent turn {f.turn}: {f.issue}<br /><span><b>Suggested fix:</b> {f.suggested_fix}</span></div>
-        ))}
-        <div style={{ marginTop: 10 }}>
-          {r.transcript.map((t, i) => {
-            if (t.role === "agent") n++;
-            return <div key={i} className={`msg ${t.role} ${t.role === "agent" && bad.has(n) ? "flag" : ""}`}><span className="who">{t.role}</span>{t.content}</div>;
-          })}
-        </div>
-      </div>)}
-    </div>
-  );
-}
-
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -47,6 +18,7 @@ export default function RunPage() {
   const [cmp, setCmp] = useState<Compare | null>(null);
   const [onlyFailed, setOnlyFailed] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let stop = false, timer: ReturnType<typeof setTimeout>;
@@ -65,6 +37,19 @@ export default function RunPage() {
     return () => { stop = true; clearTimeout(timer); };
   }, [id]);
 
+  async function share() {
+    try {
+      const { share_url } = await api<{ share_url: string }>(`/v1/runs/${id}/share`, { method: "POST" });
+      setRun((r) => r && { ...r, share_url });
+      await navigator.clipboard?.writeText(share_url).then(() => setCopied(true), () => {});
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not create link"); }
+  }
+
+  async function unshare() {
+    try { await api(`/v1/runs/${id}/share`, { method: "DELETE" }); setRun((r) => r && { ...r, share_url: null }); setCopied(false); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not turn off link"); }
+  }
+
   async function rerun() {
     try { const r = await api<Run>(`/v1/runs/${id}/rerun`, { method: "POST" }); router.push(`/runs/${r.id}`); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not re-run"); }
@@ -81,7 +66,9 @@ export default function RunPage() {
         <h1>{run.label || "Test run"} <RunStatus run={run} /></h1>
         {run.status === "completed" && (
           <div className="row">
-            <button className="btn" onClick={() => openReport(run.id).catch((e) => setError(e.message))}>Open shareable report</button>
+            <button className="btn" onClick={share} title="Anyone with the link can view results. Your prompt, rules and credentials are never shown.">
+              {run.share_url ? "Copy share link" : "Share report"}</button>
+            <button className="btn" onClick={() => openReport(run.id).catch((e) => setError(e.message))}>Download report</button>
             {me.limits.regression
               ? <button className="btn primary" onClick={rerun} title="Replay the same scenarios, e.g. after changing your prompt">Re-run same tests</button>
               : <Link className="btn" href="/billing">Regression re-runs: upgrade</Link>}
@@ -89,6 +76,11 @@ export default function RunPage() {
       </div>
       <p className="muted mono">{run.id} · {fmtDate(run.created_at)}</p>
       {error && <div className="alert">{error}</div>}
+      {run.share_url && (<div className="alert info" style={{ wordBreak: "break-all" }}>
+        {copied ? "Link copied. " : ""}Public link: <a href={run.share_url} target="_blank" rel="noreferrer">{run.share_url}</a>{" "}
+        · <a href="#" onClick={(e) => { e.preventDefault(); unshare(); }}>Turn off link</a>
+        <div className="hint" style={{ marginTop: 4 }}>Shows results and conversations only. Your prompt, rules, credentials and fixes stay private.</div>
+      </div>)}
       {run.status === "failed" && <div className="alert">This run could not finish: {run.error}. It did not count toward your quota.</div>}
       {(run.status === "queued" || run.status === "running") && run.mode !== "autonomous" && (
         <div className="card"><p>Simulating {run.conversations} customer conversations… This page updates automatically.</p></div>)}

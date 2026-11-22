@@ -63,3 +63,58 @@ def test_secrets_not_echoed():
     body = {**DEMO, "target": {"type": "prompt", "system_prompt": "You are a bot", "headers": {"authorization": "secret"}}}
     out = client.post("/v1/agents", json=body, headers=h).json()
     assert "secret" not in str(out)
+
+
+def test_share_link_is_public_and_hides_secrets():
+    h = new_org("growth")
+    agent = client.post("/v1/agents", json={**DEMO, "rules": "SECRET-RULE"}, headers=h).json()
+    run = client.post(f"/v1/agents/{agent['id']}/runs", json={"scenarios": 3, "max_turns": 3}, headers=h).json()
+    worker.run_once()
+    url = client.post(f"/v1/runs/{run['id']}/share", headers=h).json()["share_url"]
+    token = url.rsplit("/", 1)[1]
+    pub = client.get(f"/v1/public/reports/{token}")  # no auth header
+    assert pub.status_code == 200 and pub.json()["summary"]["total"] == 3
+    assert "SECRET-RULE" not in pub.text and "usage" not in pub.json()
+    assert client.get(f"/v1/runs/{run['id']}", headers=h).json()["share_url"] == url
+    assert client.delete(f"/v1/runs/{run['id']}/share", headers=h).status_code == 204
+    assert client.get(f"/v1/public/reports/{token}").status_code == 404
+
+
+def test_connectors(monkeypatch):
+    import httpx
+
+    from corella import engine
+    sent = []
+
+    def fake_post(url, json=None, headers=None, **kw):
+        sent.append((url, json))
+        if url.endswith("/chat/completions"):
+            return httpx.Response(200, json={"choices": [{"message": {"content": "OpenAI reply"}}]})
+        return httpx.Response(200, json={"data": {"answer": "Bot reply"}})
+    monkeypatch.setattr(engine.httpx, "post", fake_post)
+
+    oa = engine.OpenAICompatTarget("https://api.example.com/v1", "gpt-x", system_prompt="Be nice")
+    assert oa.reply([{"role": "user", "content": "hi"}]) == "OpenAI reply"
+    assert sent[-1][0] == "https://api.example.com/v1/chat/completions"
+    assert sent[-1][1]["messages"][0] == {"role": "system", "content": "Be nice"}
+
+    ht = engine.HttpTarget("https://bot.example.com", reply_field="data.answer",
+                           body_template={"text": "{{message}}", "sid": "{{session_id}}", "history": "{{messages}}"})
+    msgs = [{"role": "user", "content": "kal EMI?"}]
+    assert ht.reply(msgs, "s1") == "Bot reply"
+    assert sent[-1][1] == {"text": "kal EMI?", "sid": "s1", "history": msgs}
+
+    bad = engine.HttpTarget("https://bot.example.com", reply_field="nope")
+    try:
+        bad.reply(msgs)
+        raise AssertionError("expected TargetError")
+    except engine.TargetError as e:
+        assert "nope" in str(e)
+
+
+def test_connection_endpoint_validates():
+    h = new_org()
+    r = client.post("/v1/agents/test-connection", json={"type": "openai", "url": "https://api.example.com/v1"}, headers=h)
+    assert r.status_code == 422  # model required
+    r = client.post("/v1/agents/test-connection", json={"type": "demo"}, headers=h)
+    assert r.json()["ok"] is True

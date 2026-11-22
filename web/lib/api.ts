@@ -5,7 +5,7 @@ export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder",
 );
 
-const API = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+export const API = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -52,6 +52,7 @@ export type Run = {
   id: string; agent_id: string; status: string; label: string | null; summary: Summary | null; conversations: number;
   error: string | null; baseline_run_id: string | null; created_at: string; finished_at: string | null;
   mode: "standard" | "autonomous"; agent_report: AgentReport | null; events: { t: string; step: string; message: string }[];
+  share_url?: string | null;
 };
 export type AgentReport = {
   plan: { risk: string; why: string; priority: string }[];

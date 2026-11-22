@@ -85,6 +85,7 @@ class Run(Base):
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     config: Mapped[dict] = mapped_column(JSON, default=dict)  # scenarios, personas, max_turns, label
     baseline_run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # set for regression re-runs
+    share_token: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)  # public link
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # LLM calls/tokens, for cost tracking
     agent_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # autonomous mode: plan, root causes, patch
