@@ -67,7 +67,7 @@ export default function Login() {
           <p className="auth-quote">&ldquo;Kal manager ne bola tha fee maaf hogi.&rdquo;</p>
           <p className="auth-sub">One agreeable reply to a line like this can cost a lender. Corella finds those replies before your customers do, in 13 Indian languages, on chat and voice.</p>
         </div>
-        <span style={{ fontSize: 13, opacity: .7 }}>Made in Patna, India</span>
+        <span style={{ fontSize: 13, opacity: .7 }}>Made in India</span>
       </aside>
       <div className="auth-main">
       <div className="card" style={{ width: "100%", maxWidth: 420, padding: "28px 28px 22px" }}>

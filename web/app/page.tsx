@@ -105,7 +105,7 @@ export default function Home() {
       </section>
 
       <footer className="spread muted" style={{ padding: "24px 0 40px", fontSize: 13, borderTop: "1px solid var(--line)" }}>
-        <span>© {new Date().getFullYear()} Corella. Made in Patna, India.</span>
+        <span>© {new Date().getFullYear()} Corella. Made in India.</span>
         <span className="row" style={{ flexWrap: "wrap" }}><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/refunds">Refunds</Link><Link href="/delivery">Delivery</Link><Link href="/contact">Contact</Link></span>
       </footer>
     </div>
