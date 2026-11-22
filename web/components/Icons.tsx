@@ -16,7 +16,7 @@ export const IconBack = (p: P) => <S {...p}><path d="M15 6l-6 6 6 6" /></S>;
 /** Corella mark: an open ring (the bird's eye ring) with a blush dot. */
 export const Mark = ({ size = 28 }: P) => (
   <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="9" fill="#1b2140" />
+    <rect width="32" height="32" rx="9" fill="#232b55" />
     <path d="M21.6 10.4A8 8 0 1 0 21.6 21.6" fill="none" stroke="#f5b5b0" strokeWidth="3.6" strokeLinecap="round" />
     <circle cx="23.2" cy="16" r="2.3" fill="#f3f4f8" />
   </svg>

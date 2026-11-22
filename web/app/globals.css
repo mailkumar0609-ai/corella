@@ -2,33 +2,21 @@
    Palette: indigo ink + porcelain, peacock teal for action, Corella blush (the bird's pink lore) for the brand
    and for flagged turns, turmeric for warnings. Type: Bricolage Grotesque (display) + Hanken Grotesk (text). */
 :root {
-  --bg: #f3f4f8; --panel: #ffffff; --panel-2: #f8f9fc; --ink: #1b2140; --ink-2: #3a4060; --muted: #5d637b;
-  --line: #e1e4ee; --line-2: #cfd4e3; --soft: #eef0f6;
-  --primary: #0f6e78; --primary-2: #0b5961; --primary-ink: #ffffff; --primary-soft: #e3f1f2;
-  --blush: #f5b5b0; --blush-soft: #fdeceb;
-  --ok: #1d7a55; --bad: #c23b3b; --warn: #a8701a;
-  --side: #1b2140; --side-ink: #c9cde0; --side-hi: #ffffff; --side-soft: rgba(255,255,255,.07);
+  --bg: #141a36; --panel: #1d2448; --panel-2: #182043; --ink: #f3f4f8; --ink-2: #ccd1ec; --muted: #9aa2cf;
+  --line: #2c3463; --line-2: #3a4479; --soft: #232b55;
+  --primary: #f5b5b0; --primary-2: #f8c8c4; --primary-ink: #141a36; --primary-soft: rgba(245,181,176,.12);
+  --teal: #19a3ae; --blush: #f5b5b0; --blush-soft: rgba(245,181,176,.12);
+  --ok: #4cc08e; --bad: #f2716b; --warn: #e3b25c;
+  --side: #10152d; --side-ink: #b9c0e4; --side-hi: #ffffff; --side-soft: rgba(245,181,176,.08);
   --accent: var(--primary); --accent-ink: var(--primary-ink);
-  --r-lg: 16px; --r: 12px; --r-sm: 9px;
-  --shadow: 0 1px 0 rgba(27,33,64,.04), 0 8px 24px -12px rgba(27,33,64,.12);
-  --shadow-pop: 0 18px 50px -18px rgba(27,33,64,.35);
+  --r-lg: 22px; --r: 14px; --r-sm: 10px;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 18px 40px -24px rgba(0,0,0,.6);
+  --shadow-pop: 0 24px 60px -20px rgba(0,0,0,.75);
   --font: var(--font-text), ui-sans-serif, system-ui, "Noto Sans", "Noto Sans Devanagari", sans-serif;
   --display: var(--font-display), var(--font);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --ease: cubic-bezier(.2,.7,.2,1);
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0d1124; --panel: #151a31; --panel-2: #12162b; --ink: #e7e9f3; --ink-2: #c3c7da; --muted: #9298b2;
-    --line: #262c48; --line-2: #343b5c; --soft: #1c2240;
-    --primary: #38b2b4; --primary-2: #52c4c6; --primary-ink: #06222a; --primary-soft: #133238;
-    --blush: #f0a49e; --blush-soft: #3a2330;
-    --ok: #4cc08e; --bad: #f07a72; --warn: #e3b25c;
-    --side: #0a0e1f; --side-soft: rgba(255,255,255,.06);
-    --shadow: 0 1px 0 rgba(0,0,0,.3); --shadow-pop: 0 18px 50px -18px rgba(0,0,0,.7);
-    color-scheme: dark;
-  }
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -36,12 +24,13 @@ html { -webkit-text-size-adjust: 100%; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15.5px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
 a { color: var(--primary); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 a:hover { color: var(--primary-2); }
-h1, h2, h3 { font-family: var(--display); line-height: 1.15; margin: 0 0 .45em; letter-spacing: -.018em; color: var(--ink); font-weight: 650; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; margin: 0 0 .45em; letter-spacing: -.025em; color: var(--ink); font-weight: 700; }
+h1 { font-weight: 800; letter-spacing: -.035em; }
 h1 { font-size: 30px; } h2 { font-size: 20px; } h3 { font-size: 16.5px; letter-spacing: -.01em; }
 p { margin: 0 0 .85em; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .muted { color: var(--muted); }
-::selection { background: var(--blush); color: #1b2140; }
+::selection { background: var(--blush); color: #141a36; }
 :focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
 
 /* buttons */
@@ -221,3 +210,17 @@ details > summary { cursor: pointer; color: var(--primary); font-weight: 600; }
 .auth-main { display: grid; place-items: center; padding: 24px 16px; }
 .auth-brand-sm { display: none; }
 @media (max-width: 860px) { .auth { grid-template-columns: 1fr; } .auth-side { display: none; } .auth-brand-sm { display: inline-flex; margin-bottom: 8px; } }
+
+/* Poster theme: faint grid and two soft glows behind everything */
+body { position: relative; min-height: 100vh; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(700px 700px at 100% -10%, rgba(15,110,120,.35), transparent 70%),
+    radial-gradient(800px 800px at -10% 115%, rgba(245,181,176,.10), transparent 70%),
+    linear-gradient(rgba(245,181,176,.045) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(90deg, rgba(245,181,176,.045) 1px, transparent 1px) 0 0 / 56px 56px,
+    var(--bg); }
+html, body { background: transparent; }
+html { background: var(--bg); }
+.card, .stat, .strip > div { backdrop-filter: blur(2px); }
+.bar > span { background: var(--teal); }
