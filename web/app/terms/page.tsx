@@ -5,7 +5,7 @@ export const metadata = { title: "Terms of Service | Corella" };
 export default function Page() {
   return (
     <Legal title="Terms of Service">
-      <p>These Terms govern your use of Corella (the &quot;Service&quot;), available at corella.live, operated by Munna Kumar, a sole proprietor based in Patna, Bihar, India, trading as Corella (&quot;Corella&quot;, &quot;we&quot;, &quot;us&quot;). By creating an account or using the Service, you agree to these Terms on behalf of yourself and the organisation you represent (&quot;you&quot;, &quot;Customer&quot;).</p>
+      <p>These Terms govern your use of Corella (the &quot;Service&quot;), available at corella.live, operated by PARKEASE BREAKTHROUGH VENTURE PRIVATE LIMITED, a private limited company incorporated in India with its office in Patna, Bihar (&quot;Corella&quot;, &quot;we&quot;, &quot;us&quot;). By creating an account or using the Service, you agree to these Terms on behalf of yourself and the organisation you represent (&quot;you&quot;, &quot;Customer&quot;).</p>
 
       <h2>1. The Service</h2>
       <p>Corella tests conversational AI agents (chat and voice bots). It generates simulated customer conversations, sends them to an agent you connect, evaluates the agent&apos;s replies, and reports failures, likely root causes and suggested prompt changes. Results are produced by automated AI models and are guidance only: they may be incomplete or wrong, and you remain responsible for reviewing them and for how your agent behaves in production.</p>
@@ -68,7 +68,7 @@ export default function Page() {
       <p>We may update these Terms. Material changes will be notified by email or in the app at least 15 days before they take effect. Continuing to use the Service after that date means you accept them.</p>
 
       <h2>15. Contact</h2>
-      <p>Corella, Patna, Bihar, India. Email: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</p>
+      <p>PARKEASE BREAKTHROUGH VENTURE PRIVATE LIMITED (Corella), Patna, Bihar, India. Email: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</p>
     </Legal>
   );
 }

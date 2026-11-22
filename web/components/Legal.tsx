@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Mark } from "@/components/Icons";
 
 export const CONTACT = "hello@corella.live";
-export const UPDATED = "21 November 2026";
+export const UPDATED = "22 November 2026";
 
 export default function Legal({ title, children }: { title: string; children: React.ReactNode }) {
   return (

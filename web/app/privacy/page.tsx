@@ -5,7 +5,7 @@ export const metadata = { title: "Privacy Policy | Corella" };
 export default function Page() {
   return (
     <Legal title="Privacy Policy">
-      <p>This policy explains how Corella (operated by Munna Kumar, Patna, Bihar, India) collects and uses personal data when you use corella.live and the Corella API. We handle personal data in line with the Digital Personal Data Protection Act, 2023 (&quot;DPDP Act&quot;) and the Information Technology Act, 2000 and its rules.</p>
+      <p>This policy explains how Corella (operated by PARKEASE BREAKTHROUGH VENTURE PRIVATE LIMITED, Patna, Bihar, India) collects and uses personal data when you use corella.live and the Corella API. We handle personal data in line with the Digital Personal Data Protection Act, 2023 (&quot;DPDP Act&quot;) and the Information Technology Act, 2000 and its rules.</p>
 
       <h2>1. What we collect</h2>
       <ul>
@@ -52,7 +52,7 @@ export default function Page() {
       <p>The Service is for businesses and is not directed at anyone under 18.</p>
 
       <h2>9. Grievance officer</h2>
-      <p>Munna Kumar, Corella, Patna, Bihar, India. Email: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. We acknowledge grievances within 48 hours and aim to resolve them within 30 days.</p>
+      <p>Munna Kumar, Grievance Officer, PARKEASE BREAKTHROUGH VENTURE PRIVATE LIMITED (Corella), Patna, Bihar, India. Email: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. We acknowledge grievances within 48 hours and aim to resolve them within 30 days.</p>
 
       <h2>10. Changes</h2>
       <p>We will post updates here and email you about material changes.</p>

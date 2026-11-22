@@ -10,7 +10,7 @@ export default function Page() {
         <li><b>Email:</b> <a href={`mailto:${CONTACT}`}>{CONTACT}</a></li>
         <li><b>Sales, demos and enterprise plans:</b> <a href={`mailto:${CONTACT}?subject=Corella%20demo`}>{CONTACT}</a></li>
         <li><b>Billing, refunds and grievances:</b> <a href={`mailto:${CONTACT}?subject=Billing`}>{CONTACT}</a></li>
-        <li><b>Business:</b> Corella (proprietor: Munna Kumar), Patna, Bihar, India</li>
+        <li><b>Business:</b> Corella is a product of PARKEASE BREAKTHROUGH VENTURE PRIVATE LIMITED, Patna, Bihar, India</li>
       </ul>
     </Legal>
   );
