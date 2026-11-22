@@ -48,7 +48,7 @@ export default function Home() {
             to Tamil, Telugu and Bengali. You see every conversation that went wrong, the exact turn it broke, and the prompt change that fixes it.</p>
           <div className="row" style={{ marginTop: 26, gap: 12 }}>
             <Link href="/login" className="btn primary lg">Start free with 100 conversations</Link>
-            <a href="mailto:hello@corella.live?subject=Free%20failure%20report" className="btn lg">Get a free failure report</a>
+            <a href="mailto:hello@corella.live?subject=Free%20test%20request" className="btn lg">Request a free test</a>
           </div>
           <p className="muted" style={{ fontSize: 14, marginTop: 12 }}>No card needed. First report in about three minutes.</p>
         </div>
@@ -99,9 +99,9 @@ export default function Home() {
       </section>
 
       <section className="card" style={{ margin: "32px 0", textAlign: "center", padding: 36 }}>
-        <h2 style={{ fontSize: 26 }}>Launching an agent soon?</h2>
+        <h2 style={{ fontSize: 26 }}>Building an AI agent for your customers? We&apos;ll test it free.</h2>
         <p className="muted">Send us your agent's number or endpoint. We'll run 100 simulated Indian customers and send you the failure report, free.</p>
-        <a href="mailto:hello@corella.live?subject=Free%20failure%20report" className="btn primary">Get my free failure report</a>
+        <a href="mailto:hello@corella.live?subject=Free%20test%20request" className="btn primary">Request a free test</a>
       </section>
 
       <footer className="spread muted" style={{ padding: "24px 0 40px", fontSize: 13, borderTop: "1px solid var(--line)" }}>
