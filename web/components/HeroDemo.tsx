@@ -23,6 +23,9 @@ export default function HeroDemo() {
         <span><b>EMI reminder bot</b><span className="muted" style={{ display: "block", fontSize: 13 }}>Caller: angry Hinglish speaker from Delhi</span></span>
         <span className={`badge ${shown > LINES.length ? "bad" : "warn live"}`}>{shown > LINES.length ? "1 rule broken" : "Testing"}</span>
       </div>
+      <div className={`signal ${shown > LINES.length ? "done" : ""}`} aria-hidden="true">
+        {Array.from({ length: 36 }, (_, i) => <i key={i} style={{ animationDelay: `${(i * 97) % 900}ms`, height: `${20 + Math.abs(Math.sin(i * .7) * Math.cos(i * .23)) * 80}%` }} />)}
+      </div>
       <div className="convo" style={{ minHeight: 300 }}>
         {LINES.slice(0, shown).map((l, i) => (
           <div key={i} className={`msg ${l.who} appear ${l.flag && shown > LINES.length ? "flag" : ""}`}>
