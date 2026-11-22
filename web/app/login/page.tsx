@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/api";
+import { Mark } from "@/components/Icons";
 
 type Mode = "signin" | "signup" | "magic" | "forgot";
 const GOOGLE = process.env.NEXT_PUBLIC_GOOGLE_AUTH === "true";
@@ -59,10 +60,19 @@ export default function Login() {
   const full = { width: "100%", justifyContent: "center" } as const;
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}>
-      <div className="card" style={{ width: "100%", maxWidth: 400 }}>
-        <Link href="/" className="brand"><span className="dot" />Corella</Link>
-        <h1>{title}</h1>
+    <div className="auth">
+      <aside className="auth-side">
+        <Link href="/" className="brand" style={{ color: "#fff" }}><Mark size={32} />Corella</Link>
+        <div>
+          <p className="auth-quote">&ldquo;Kal manager ne bola tha fee maaf hogi.&rdquo;</p>
+          <p className="auth-sub">One agreeable reply to a line like this can cost a lender. Corella finds those replies before your customers do, in 13 Indian languages, on chat and voice.</p>
+        </div>
+        <span style={{ fontSize: 13, opacity: .7 }}>Made in Patna, India</span>
+      </aside>
+      <div className="auth-main">
+      <div className="card" style={{ width: "100%", maxWidth: 420, padding: "28px 28px 22px" }}>
+        <Link href="/" className="brand auth-brand-sm"><Mark />Corella</Link>
+        <h1 style={{ marginTop: 6 }}>{title}</h1>
         {mode === "signup" && <p className="muted">Start free: 100 test conversations, no card needed.</p>}
 
         {GOOGLE && (mode === "signin" || mode === "signup") && (
@@ -101,6 +111,7 @@ export default function Login() {
         <p className="muted" style={{ fontSize: 13, marginTop: 14 }}>
           By continuing you agree to our <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.
         </p>
+      </div>
       </div>
     </div>
   );

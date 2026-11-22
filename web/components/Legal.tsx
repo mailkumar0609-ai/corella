@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Mark } from "@/components/Icons";
 
 export const CONTACT = "hello@corella.live";
 export const UPDATED = "21 November 2026";
@@ -6,7 +7,7 @@ export const UPDATED = "21 November 2026";
 export default function Legal({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="legal" style={{ maxWidth: 760, margin: "0 auto", padding: "32px 16px 64px", lineHeight: 1.65 }}>
-      <Link href="/" className="brand"><span className="dot" />Corella</Link>
+      <Link href="/" className="brand"><Mark />Corella</Link>
       <h1 style={{ marginBottom: 4 }}>{title}</h1>
       <p className="muted" style={{ marginTop: 0 }}>Last updated: {UPDATED}</p>
       {children}

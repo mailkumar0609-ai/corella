@@ -36,7 +36,7 @@ export default function Settings() {
 
   return (
     <>
-      <h1>API & webhooks</h1>
+      <div className="page-head"><div><h1>API &amp; webhooks</h1><p>Run tests from your code and CI, and get told when they finish.</p></div></div>
       {error && <div className="alert">{error}</div>}
       <div className="card" style={{ marginTop: 16 }}>
         <h2>API keys</h2>

@@ -187,7 +187,7 @@ function AgentsInner() {
   return (
     <>
       <div className="spread">
-        <h1>Agents</h1>
+        <div><h1>Agents</h1><p className="muted" style={{ margin: "6px 0 0" }}>The bots Corella tests: chat, voice or a prompt.</p></div>
         {!adding && (full
           ? <Link className="btn" href="/billing">Upgrade to add more agents</Link>
           : <button className="btn primary" onClick={() => setAdding(true)}>Add agent</button>)}

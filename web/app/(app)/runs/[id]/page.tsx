@@ -62,7 +62,7 @@ export default function RunPage() {
 
   return (
     <>
-      <Link href={`/agents/${run.agent_id}`} className="muted">Back to agent</Link>
+      <Link href={`/agents/${run.agent_id}`} className="crumb">‹ Back to agent</Link>
       <div className="spread">
         <h1>{run.label || "Test run"} <RunStatus run={run} /></h1>
         {run.status === "completed" && (
@@ -75,7 +75,7 @@ export default function RunPage() {
               : <Link className="btn" href="/billing">Regression re-runs: upgrade</Link>}
           </div>)}
       </div>
-      <p className="muted mono">{run.id} · {fmtDate(run.created_at)}</p>
+      <p className="muted" style={{ fontSize: 14 }}>Started {fmtDate(run.created_at)}</p>
       {error && <div className="alert">{error}</div>}
       {run.share_url && (<div className="alert info" style={{ wordBreak: "break-all" }}>
         {copied ? "Link copied. " : ""}Public link: <a href={run.share_url} target="_blank" rel="noreferrer">{run.share_url}</a>{" "}

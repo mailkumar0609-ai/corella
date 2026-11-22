@@ -73,7 +73,7 @@ export default function Billing() {
   return (
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-      <h1>Billing</h1>
+      <div className="page-head"><div><h1>Plan &amp; billing</h1><p>Your plan, this month&apos;s usage and payments.</p></div></div>
       <p className="muted">Current plan: <span className="badge">{current}</span>{me.organization.subscription_status && <> · {me.organization.subscription_status}</>}</p>
       {msg && <div className="alert info">{msg}</div>}
       {error && <div className="alert">{error}</div>}

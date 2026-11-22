@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+
+const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", display: "swap" });
+const text = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-text", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Corella | Test your AI agent before your customers do",
@@ -11,10 +15,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#f7f6f2" }, { media: "(prefers-color-scheme: dark)", color: "#121316" }],
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#f3f4f8" }, { media: "(prefers-color-scheme: dark)", color: "#0d1124" }],
   width: "device-width", initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" className={`${display.variable} ${text.variable}`}><body>{children}</body></html>;
 }

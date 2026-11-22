@@ -3,6 +3,7 @@ import Link from "next/link";
 import ComplianceTable, { type RuleVerdict } from "@/components/ComplianceTable";
 import ResultCard, { type CardRow } from "@/components/ResultCard";
 import { API } from "@/lib/api";
+import { Mark } from "@/components/Icons";
 
 type Shared = {
   agent: string; created_at: string; mode: string;
@@ -33,7 +34,7 @@ export default async function SharedReport({ params }: { params: Promise<{ token
   const d = await load((await params).token);
   if (!d) return (
     <div style={{ maxWidth: 560, margin: "80px auto", padding: 16, textAlign: "center" }}>
-      <Link href="/" className="brand"><span className="dot" />Corella</Link>
+      <Link href="/" className="brand"><Mark />Corella</Link>
       <h1>Report not available</h1>
       <p className="muted">This link is invalid or its owner turned it off.</p>
     </div>);
@@ -43,7 +44,7 @@ export default async function SharedReport({ params }: { params: Promise<{ token
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px 64px" }}>
       <div className="spread">
-        <Link href="/" className="brand"><span className="dot" />Corella</Link>
+        <Link href="/" className="brand"><Mark />Corella</Link>
         <Link href="/login" className="btn primary">Test your own agent free</Link>
       </div>
       <p className="muted" style={{ marginBottom: 0 }}>AI agent test report · {new Date(d.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>

@@ -68,7 +68,7 @@ export default function AgentPage() {
   return (
     <>
       <div className="spread">
-        <div><Link href="/agents" className="muted">Agents</Link><h1>{agent.name}</h1></div>
+        <div><Link href="/agents" className="crumb">‹ All agents</Link><h1>{agent.name}</h1></div>
         {runs.length === 0 && <button className="btn danger" onClick={remove}>Delete agent</button>}
       </div>
       <p className="muted">{agent.description}</p>
@@ -140,11 +140,11 @@ export default function AgentPage() {
       <div className="card">
         <h2>History</h2>
         {runs.length === 0 ? <p className="muted">No runs yet.</p> : (
-          <table><thead><tr><th>Run</th><th>Status</th><th>Pass rate</th><th>When</th></tr></thead><tbody>
+          <table><thead><tr><th>Run</th><th>Result</th><th>Pass rate</th><th className="hide-sm">Started</th></tr></thead><tbody>
             {runs.map((r) => (
               <tr key={r.id} className="link" onClick={() => router.push(`/runs/${r.id}`)}>
                 <td>{r.label || <span className="mono">{r.id}</span>}</td><td><RunStatus run={r} /></td>
-                <td>{r.summary ? `${passRate(r.summary)}%` : "–"}</td><td className="muted">{fmtDate(r.created_at)}</td>
+                <td>{r.summary ? `${passRate(r.summary)}%` : "–"}</td><td className="muted hide-sm">{fmtDate(r.created_at)}</td>
               </tr>))}
           </tbody></table>
         )}

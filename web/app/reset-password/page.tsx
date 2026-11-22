@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/api";
+import { Mark } from "@/components/Icons";
 
 export default function ResetPassword() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function ResetPassword() {
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}>
       <div className="card" style={{ width: "100%", maxWidth: 400 }}>
-        <Link href="/" className="brand"><span className="dot" />Corella</Link>
+        <Link href="/" className="brand"><Mark />Corella</Link>
         <h1>Choose a new password</h1>
         {!ready ? (
           <p className="muted">Open this page from the reset link in your email. Link expired? <Link href="/login">Request a new one</Link>.</p>

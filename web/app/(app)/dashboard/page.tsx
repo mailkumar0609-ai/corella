@@ -1,54 +1,89 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMe } from "@/components/AppShell";
-import { api, fmtDate, passRate, type Agent, type Run } from "@/lib/api";
 import RunStatus from "@/components/RunStatus";
+import { api, fmtDate, passRate, type Agent, type Run } from "@/lib/api";
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
 
 export default function Dashboard() {
   const { me } = useMe();
+  const router = useRouter();
   const [runs, setRuns] = useState<Run[] | null>(null);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<Agent[] | null>(null);
 
   useEffect(() => {
-    api<Run[]>("/v1/runs?limit=8").then(setRuns);
-    api<Agent[]>("/v1/agents").then(setAgents);
+    api<Run[]>("/v1/runs?limit=8").then(setRuns).catch(() => setRuns([]));
+    api<Agent[]>("/v1/agents").then(setAgents).catch(() => setAgents([]));
   }, []);
 
   const used = me.conversations_this_month, limit = me.limits.monthly_conversations;
   const done = (runs || []).filter((r) => r.summary);
   const avgPass = done.length ? Math.round(done.reduce((a, r) => a + passRate(r.summary), 0) / done.length) : null;
   const failures = done.reduce((a, r) => a + (r.summary?.failed || 0), 0);
-  const name = new Map(agents.map((a) => [a.id, a.name]));
+  const name = new Map((agents || []).map((a) => [a.id, a.name]));
+  const firstAgent = agents?.[0];
+  const loading = runs === null || agents === null;
 
   return (
     <>
-      <div className="spread"><h1>Overview</h1><Link className="btn primary" href={agents.length ? `/agents/${agents[0].id}` : "/agents?new=1"}>Run a test</Link></div>
-      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", margin: "18px 0" }}>
-        <div className="card stat"><div className="n">{avgPass === null ? "–" : `${avgPass}%`}</div><div className="l">Average pass rate (recent runs)</div></div>
-        <div className="card stat"><div className="n">{failures}</div><div className="l">Failures found (recent runs)</div></div>
-        <div className="card stat"><div className="n">{agents.length}<span className="muted" style={{ fontSize: 16 }}> / {me.limits.max_agents}</span></div><div className="l">Agents</div></div>
-        <div className="card stat">
+      <div className="page-head">
+        <div>
+          <h1>{greeting()}</h1>
+          <p>{me.organization.name}: how your agents are holding up.</p>
+        </div>
+        <Link className="btn primary lg" href={firstAgent ? `/agents/${firstAgent.id}` : "/agents?new=1"}>
+          {firstAgent ? "Run a test" : "Add your first agent"}</Link>
+      </div>
+
+      <div className="strip">
+        <div className="stat"><div className="n">{avgPass === null ? "–" : `${avgPass}%`}</div><div className="l">Average pass rate, recent runs</div></div>
+        <div className="stat"><div className="n" style={{ color: failures ? "var(--bad)" : undefined }}>{failures}</div><div className="l">Failed conversations found</div></div>
+        <div className="stat"><div className="n">{agents?.length ?? "–"}<span className="muted" style={{ fontSize: 17 }}> / {me.limits.max_agents}</span></div><div className="l">Agents under test</div></div>
+        <div className="stat">
           <div className="n">{used.toLocaleString("en-IN")}</div>
-          <div className="l">of {limit.toLocaleString("en-IN")} conversations this month</div>
-          <div className="bar" style={{ marginTop: 8 }}><span style={{ width: `${Math.min(100, (100 * used) / limit)}%` }} /></div>
+          <div className="l">of {limit.toLocaleString("en-IN")} conversations used this month</div>
+          <div className="bar" style={{ marginTop: 10 }}><span style={{ width: `${Math.min(100, (100 * used) / Math.max(limit, 1))}%` }} /></div>
         </div>
       </div>
+
       {used / limit > 0.8 && me.organization.plan !== "enterprise" && (
-        <div className="alert info">You have used {Math.round((100 * used) / limit)}% of this month's conversations. <Link href="/billing">Upgrade your plan</Link>.</div>
+        <div className="alert info">You&apos;ve used {Math.round((100 * used) / limit)}% of this month&apos;s conversations. <Link href="/billing">See plans</Link></div>
       )}
-      <div className="card">
-        <h2>Recent test runs</h2>
-        {runs === null ? <p className="muted">Loading…</p> : runs.length === 0 ? (
-          <p className="muted">No runs yet. <Link href="/agents?new=1">Add your first agent</Link> and run a test; the built-in demo agent works without any setup.</p>
+
+      <div className="card" style={{ marginTop: 18, padding: 0, overflow: "hidden" }}>
+        <div className="spread" style={{ padding: "18px 22px 12px" }}>
+          <h2 style={{ margin: 0 }}>Recent test runs</h2>
+          {!!runs?.length && <Link href="/runs" style={{ fontSize: 14, fontWeight: 600 }}>View all</Link>}
+        </div>
+        {loading ? (
+          <div style={{ padding: "4px 22px 22px", display: "grid", gap: 12 }}>
+            {[0, 1, 2].map((i) => <div key={i} className="skel" style={{ height: 22 }} />)}
+          </div>
+        ) : runs!.length === 0 ? (
+          <div style={{ padding: "8px 22px 28px", maxWidth: 560 }}>
+            <p style={{ fontSize: 16, color: "var(--ink)" }}>Nothing tested yet.</p>
+            <p className="muted">Add an agent and run your first test. No setup? The built-in demo agent shows you a full report in about three minutes.</p>
+            <Link className="btn primary" href="/agents?new=1">Add an agent</Link>
+          </div>
         ) : (
-          <table><thead><tr><th>Run</th><th>Agent</th><th>Status</th><th>Pass rate</th><th>When</th></tr></thead><tbody>
-            {runs.map((r) => (
-              <tr key={r.id} className="link" onClick={() => (window.location.href = `/runs/${r.id}`)}>
-                <td>{r.label || <span className="mono">{r.id}</span>}</td><td>{name.get(r.agent_id) || "–"}</td>
-                <td><RunStatus run={r} /></td><td>{r.summary ? `${passRate(r.summary)}%` : "–"}</td><td className="muted">{fmtDate(r.created_at)}</td>
-              </tr>))}
-          </tbody></table>
+          <div style={{ overflowX: "auto" }}>
+            <table><thead><tr><th style={{ paddingLeft: 22 }}>Run</th><th className="hide-sm">Agent</th><th>Result</th><th>Pass rate</th><th className="hide-sm">Started</th></tr></thead><tbody>
+              {runs!.map((r) => (
+                <tr key={r.id} className="link" onClick={() => router.push(`/runs/${r.id}`)}>
+                  <td style={{ paddingLeft: 22, fontWeight: 600 }}>{r.label || "Test run"}</td>
+                  <td className="muted hide-sm">{name.get(r.agent_id) || "–"}</td>
+                  <td><RunStatus run={r} /></td>
+                  <td>{r.summary ? <b>{passRate(r.summary)}%</b> : "–"}</td>
+                  <td className="muted hide-sm" style={{ whiteSpace: "nowrap" }}>{fmtDate(r.created_at)}</td>
+                </tr>))}
+            </tbody></table>
+          </div>
         )}
       </div>
     </>
