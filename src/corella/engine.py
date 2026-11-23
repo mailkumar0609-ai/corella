@@ -186,7 +186,41 @@ def generate_scenarios(llm: LLM, agent_description: str, n: int = 10, personas: 
               '{"scenarios":[{"id":"snake_case","goal":"...","persona":"<persona id>",'
               '"opening":"first customer message, in the persona\'s language","success":"what correct agent behaviour looks like"}]}')
     data = llm.complete_json(SCENARIO_SYS + " You generate test scenarios.", prompt, 3000)
-    return [Scenario(**{k: s[k] for k in ("id", "goal", "persona", "opening", "success")}) for s in (data if isinstance(data, list) else data["scenarios"])][:n]
+    return parse_scenarios(data, n)
+
+
+def parse_scenarios(data, limit: int, seen: set[str] | None = None) -> list[Scenario]:
+    """Turn model output into scenarios. Skips malformed items instead of failing the whole run, and keeps ids
+    unique (models sometimes repeat ids or wrap the list differently)."""
+    seen = set() if seen is None else seen
+    if isinstance(data, dict):
+        items = data.get("scenarios")
+        if not isinstance(items, list):
+            lists = [v for v in data.values() if isinstance(v, list)]
+            items = lists[0] if len(lists) == 1 else []
+    else:
+        items = data if isinstance(data, list) else []
+    out = []
+    for s in items:
+        if not isinstance(s, dict):
+            continue
+        try:
+            sc = Scenario(**{k: str(s[k]).strip() for k in ("id", "goal", "persona", "opening", "success")})
+        except KeyError:
+            continue
+        if not sc.opening:
+            continue
+        sc.id = sc.id or "scenario"
+        base, i = sc.id, 2
+        while sc.id in seen:
+            sc.id, i = f"{base}_{i}", i + 1
+        seen.add(sc.id)
+        out.append(sc)
+        if len(out) >= limit:
+            break
+    if not out:
+        raise ValueError("The model returned no usable test scenarios")
+    return out
 
 
 def simulate(llm: LLM, target: Target, sc: Scenario, max_turns: int = 6) -> list[dict]:
@@ -227,7 +261,37 @@ def score(llm: LLM, sc: Scenario, transcript: list[dict], rules: str = "") -> di
               f"Transcript:\n{convo}\n\nReturn JSON: "
               '{"task_success":n,"accuracy":n,"compliance":n,"language_handling":n,"tone":n,"passed":bool,'
               '"failures":[{"turn":n,"category":"...","issue":"...","suggested_fix":"..."}],"summary":"one line"}')
-    return llm.complete_json(SCORE_SYS, prompt, 1200)
+    return normalize_score(llm.complete_json(SCORE_SYS, prompt, 1200))
+
+
+SCORE_KEYS = ("task_success", "accuracy", "compliance", "language_handling", "tone")
+
+
+def normalize_score(raw) -> dict:
+    """Make the judge's verdict consistent: clamp scores to 1-5 and enforce the pass rule in code (any score <= 2
+    fails), so a lenient or malformed judge answer can never mark a bad conversation as passed."""
+    if not isinstance(raw, dict):
+        return {**{k: 1 for k in SCORE_KEYS}, "passed": False, "judge_error": True,
+                "failures": [{"turn": 0, "category": "judge_error", "issue": "The evaluator returned an unreadable verdict",
+                              "suggested_fix": "Re-run this scenario"}], "summary": "Evaluator output unreadable"}
+    out = dict(raw)
+    for k in SCORE_KEYS:
+        try:
+            out[k] = max(1, min(5, int(round(float(raw.get(k, 1))))))
+        except (TypeError, ValueError):
+            out[k] = 1
+    fails = raw.get("failures")
+    out["failures"] = [f for f in fails if isinstance(f, dict)] if isinstance(fails, list) else []
+    rule_ok = all(out[k] >= 3 for k in SCORE_KEYS)
+    p = raw.get("passed")
+    judged_pass = p is True or (isinstance(p, str) and p.strip().lower() == "true")
+    out["passed"] = judged_pass and rule_ok
+    if judged_pass and not rule_ok:
+        low = [k for k in SCORE_KEYS if out[k] <= 2]
+        out["failures"].append({"turn": 0, "category": low[0], "issue": f"Scored {', '.join(low)} at 2 or below",
+                                "suggested_fix": "See the low-scoring criteria in this conversation"})
+    out.setdefault("summary", "")
+    return out
 
 
 def run_suite(llm: LLM, target: Target, scenarios: list[Scenario], rules: str = "",

@@ -109,6 +109,7 @@ class RunIn(BaseModel):
     mode: Literal["standard", "autonomous"] = "standard"
     scenarios: int | list[ScenarioIn] = 10  # autonomous mode: the conversation budget
     rounds: int = Field(default=3, ge=1, le=6)
+    fix_attempts: int = Field(default=2, ge=1, le=4)  # autonomous mode: patch, replay, refine attempts
     personas: list[str] | None = None
     max_turns: int = Field(default=6, ge=1, le=20)
     label: str | None = Field(default=None, max_length=200)

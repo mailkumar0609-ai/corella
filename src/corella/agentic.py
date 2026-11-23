@@ -102,17 +102,43 @@ def first_scenarios(llm: LLM, desc: str, rules: str, plan: list[dict], n: int, s
     return _scenarios(llm.complete_json(EXPLORE_SYS, prompt, 4000), seen, n)
 
 
-def analyze(llm: LLM, failed: list[Result], max_cases: int = 25) -> list[dict]:
-    if not failed:
-        return []
+ROOT_CAUSE_SHAPE = ('{"root_causes":[{"cause":"what is wrong, in one sentence","severity":"critical|high|medium|low",'
+                    '"scenario_ids":["..."],"fix":"the instruction to add or change in the agent prompt"}]}')
+MERGE_SYS = ("You are Corella, an autonomous QA agent. You merge root-cause lists that were found in separate batches "
+             "of failed tests into one deduplicated list.")
+
+
+def _analyze_chunk(llm: LLM, failed: list[Result]) -> list[dict]:
     cases = "\n\n".join(
         f"[{r.scenario.id}] goal: {r.scenario.goal[:300]}\nfailures: "
-        + "; ".join(f"{f.get('category')}: {str(f.get('issue'))[:200]}" for f in r.score.get("failures", [])[:4])
-        for r in failed[-max_cases:])
+        + ("; ".join(f"{f.get('category')}: {str(f.get('issue'))[:200]}"
+                     for f in (r.score.get("failures", []) if isinstance(r.score, dict) else [])[:4])
+           or (f"error: {r.error[:200]}" if r.error else "failed"))
+        for r in failed)
     prompt = (f"Failed test conversations:\n{cases}\n\nGroup them into at most 8 root causes. Return JSON: "
-              '{"root_causes":[{"cause":"what is wrong, in one sentence","severity":"critical|high|medium|low",'
-              '"scenario_ids":["..."],"fix":"the instruction to add or change in the agent prompt"}]}')
+              f"{ROOT_CAUSE_SHAPE}")
     return [c for c in _list_from(llm.complete_json(ANALYZE_SYS, prompt, 3000), "root_causes") if isinstance(c, dict)]
+
+
+def analyze(llm: LLM, failed: list[Result], max_cases: int = 25) -> list[dict]:
+    """Group failures into root causes. Large runs are analysed recursively: each batch of `max_cases` failures is
+    analysed on its own, then the batch findings are merged, so no failure is dropped to fit the context window."""
+    if not failed:
+        return []
+    if len(failed) <= max_cases:
+        return _analyze_chunk(llm, failed)
+    parts = [_analyze_chunk(llm, failed[i:i + max_cases]) for i in range(0, len(failed), max_cases)]
+    found = [c for p in parts for c in p]
+    if len(found) <= 8:
+        return found
+    listed = "\n".join(
+        f"- [{c.get('severity')}] {c.get('cause')} | fix: {c.get('fix')} | ids: {', '.join(map(str, c.get('scenario_ids') or []))}"
+        for c in found)
+    prompt = (f"Root causes found in {len(parts)} batches of failed tests (there may be duplicates):\n{listed}\n\n"
+              "Merge duplicates and near-duplicates into at most 8 root causes, combining their scenario_ids, keeping "
+              f"the highest severity and the most specific fix. Order by severity. Return JSON: {ROOT_CAUSE_SHAPE}")
+    merged = [c for c in _list_from(llm.complete_json(MERGE_SYS, prompt, 3000), "root_causes") if isinstance(c, dict)]
+    return merged or found[:8]
 
 
 def explore(llm: LLM, desc: str, causes: list[dict], plan: list[dict], tested: list[Scenario],
@@ -138,13 +164,92 @@ def propose_fix(llm: LLM, current_prompt: str | None, desc: str, causes: list[di
     return out.get("patched_prompt") if isinstance(out, dict) else (out if isinstance(out, str) else None)
 
 
+def _issues(r: Result, limit: int = 3) -> str:
+    if r.error:
+        return f"error: {r.error[:200]}"
+    fails = r.score.get("failures", []) if isinstance(r.score, dict) else []
+    return "; ".join(f"{f.get('category')}: {str(f.get('issue'))[:200]}" for f in fails[:limit]) or "failed"
+
+
+def refine_fix(llm: LLM, original_prompt: str, patched: str, causes: list[dict],
+               still_failing: list[Result], regressed: list[Result]) -> str | None:
+    """Improve a patch using what happened when it was replayed: what still fails and what it broke."""
+    fixes = "\n".join(f"- {c.get('cause')} -> {c.get('fix')}" for c in causes)
+    sf = "\n".join(f"- [{r.scenario.id}] {r.scenario.goal[:200]} | {_issues(r)}" for r in still_failing) or "- none"
+    rg = "\n".join(f"- [{r.scenario.id}] {r.scenario.goal[:200]} | {_issues(r)}" for r in regressed) or "- none"
+    prompt = (f"Original system prompt:\n<<<\n{original_prompt}\n>>>\n\n"
+              f"Your previous patched prompt:\n<<<\n{patched}\n>>>\n\n"
+              f"Root causes the patch had to fix:\n{fixes}\n\n"
+              f"When replayed against your patch, these conversations STILL FAILED:\n{sf}\n\n"
+              f"These conversations PASSED with the original prompt but FAIL with your patch (regressions):\n{rg}\n\n"
+              "Write an improved full system prompt that fixes the remaining failures and removes the regressions, "
+              "keeping everything that already works. Be specific; prefer clear rules over vague advice. "
+              'Return JSON: {"patched_prompt":"the full new system prompt"}')
+    out = llm.complete_json(FIX_SYS, prompt, 4000)
+    return out.get("patched_prompt") if isinstance(out, dict) else (out if isinstance(out, str) else None)
+
+
+def verify_and_refine(llm: LLM, system_prompt: str, patched: str, causes: list[dict], results: list[Result],
+                      rules: str, budget: int, *, attempts: int = 2, max_turns: int = 6, workers: int = 4,
+                      emit: Emit = lambda step, msg: None) -> tuple[str, dict]:
+    """Self-improving verification. Each attempt replays the failed conversations (did the patch fix them?) and a
+    sample of passing ones (did the patch break anything?) against the patched prompt. If anything is still wrong,
+    the patch is refined with that evidence and replayed again, within `budget` conversations.
+    Returns the best patch found and its verification record."""
+    failed = [r.scenario for r in results if not r.passed]
+    passing = [r.scenario for r in results if r.passed]
+    per = max(2, budget // max(attempts, 1))
+    p_n = min(len(passing), max(1, per // 3))    # regression guard: passing conversations that must stay passing
+    f_n = min(len(failed), max(1, per - p_n))    # failures to re-test
+    fset, pset = failed[:f_n], passing[:p_n]
+    size = len(fset) + len(pset)
+
+    prompt, used, history = patched, 0, []
+    best_prompt, best, best_key = patched, None, None
+    for attempt in range(1, attempts + 1):
+        if not prompt or not fset or used + size > budget:
+            break
+        emit("verify", f"Attempt {attempt}: replaying {len(fset)} failed and {len(pset)} passing conversation(s) "
+                       "against the patched prompt")
+        after = run_suite(llm, LLMTarget(llm, prompt), fset + pset, rules, max_turns, workers)
+        used += len(after)
+        af, ap = after[:len(fset)], after[len(fset):]
+        fixed = [r.scenario.id for r in af if r.passed]
+        still = [r for r in af if not r.passed]
+        regressed = [r for r in ap if not r.passed]
+        history.append({"attempt": attempt, "fixed": len(fixed), "still_failing": len(still),
+                        "regressed": len(regressed)})
+        emit("verify", f"Attempt {attempt}: fixes {len(fixed)} of {len(af)} failures"
+                       + (f", breaks {len(regressed)} of {len(ap)} passing" if pset else ""))
+        key = (len(fixed) - 2 * len(regressed), -attempt)   # a regression costs more than a fix earns
+        if best_key is None or key > best_key:
+            best_prompt, best_key = prompt, key
+            best = {"retested": len(af), "now_passing": len(fixed), "fixed": fixed,
+                    "still_failing": [r.scenario.id for r in still],
+                    "regression_checked": len(ap), "regressed": [r.scenario.id for r in regressed],
+                    "best_attempt": attempt}
+        if not still and not regressed:
+            break
+        if attempt < attempts and used + size <= budget:
+            emit("fix", f"Refining the patch: {len(still)} still failing, {len(regressed)} regression(s)")
+            try:
+                prompt = refine_fix(llm, system_prompt, prompt, causes, still, regressed)
+            except Exception as e:  # refinement is best-effort; keep the best patch so far
+                emit("fix", f"Refinement failed ({type(e).__name__}); keeping the best patch so far")
+                break
+    if best is not None:
+        best.update({"attempts": len(history), "history": history, "conversations_used": used})
+    return best_prompt, best
+
+
 def autonomous_campaign(llm: LLM, target: Target, desc: str, rules: str, *, budget: int = 30, rounds: int = 3,
                         max_turns: int = 6, workers: int = 4, system_prompt: str | None = None,
-                        emit: Emit = lambda step, msg: None) -> Campaign:
+                        fix_attempts: int = 2, emit: Emit = lambda step, msg: None) -> Campaign:
     """Run the full plan -> attack -> learn -> explore -> fix -> verify loop within `budget` conversations."""
     c, seen = Campaign(), set()
     tested: list[Scenario] = []
-    verify_budget = max(1, budget // 5) if system_prompt else 0   # keep some budget to verify the fix
+    # keep part of the budget to verify (and refine) the fix, including a regression check
+    verify_budget = min(budget - 1, max(3, budget // 3)) if system_prompt and budget > 1 else 0
     explore_budget = budget - verify_budget
 
     emit("plan", "Reading the agent's description and rules to decide what to attack first")
@@ -193,13 +298,14 @@ def autonomous_campaign(llm: LLM, target: Target, desc: str, rules: str, *, budg
         c.patched_prompt = propose_fix(llm, system_prompt, desc, c.root_causes)
 
     if c.patched_prompt and system_prompt and verify_budget:
-        failed = [r.scenario for r in c.results if not r.passed][:verify_budget]
-        emit("verify", f"Replaying {len(failed)} failed conversation(s) against the patched prompt")
-        after = run_suite(llm, LLMTarget(llm, c.patched_prompt), failed, rules, max_turns, workers)
-        fixed = [r.scenario.id for r in after if r.passed]
-        c.verification = {"retested": len(after), "now_passing": len(fixed),
-                          "still_failing": [r.scenario.id for r in after if not r.passed], "fixed": fixed}
-        emit("verify", f"Patch fixes {len(fixed)} of {len(after)} failures")
+        c.patched_prompt, c.verification = verify_and_refine(
+            llm, system_prompt, c.patched_prompt, c.root_causes, c.results, rules, verify_budget,
+            attempts=fix_attempts, max_turns=max_turns, workers=workers, emit=emit)
+        v = c.verification
+        if v:
+            emit("verify", f"Best patch (attempt {v['best_attempt']} of {v['attempts']}): fixes {v['now_passing']} "
+                           f"of {v['retested']} failures, {len(v['regressed'])} regression(s) "
+                           f"in {v['regression_checked']} passing conversation(s)")
     elif c.patched_prompt:
         emit("verify", "Apply the patched prompt to your agent, then use Re-run to confirm the fixes")
 

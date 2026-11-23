@@ -10,10 +10,10 @@ Corella is itself an agentic AI system. In autonomous mode (`"mode": "autonomous
 
 1. **Plan:** reads the agent's description and rules and ranks the risks to attack.
 2. **Attack:** adaptive simulated customers that change tactic when the agent resists (rephrase, switch language, pressure, claimed authority).
-3. **Learn:** clusters every failure into root causes in the agent's instructions.
+3. **Learn:** clusters every failure into root causes in the agent's instructions. Large runs are analysed recursively (in batches, then merged), so no failure is dropped.
 4. **Explore:** writes new, harder scenarios aimed at those weak spots, round after round, within the conversation budget.
 5. **Fix:** writes a patched system prompt addressing every root cause.
-6. **Verify:** if Corella has the prompt, replays the failures against the patch and reports how many now pass.
+6. **Verify and refine:** if Corella has the prompt, it replays the failures against the patch *and* a sample of conversations that already passed (regression guard). If anything still fails or broke, it refines the patch with that evidence and replays again (`fix_attempts`, default 2), then keeps the best patch: one that fixes the most failures without breaking what worked. All of this stays inside the run's conversation budget.
 
 Each step is logged to `runs.events`, which the dashboard shows live.
 
@@ -67,7 +67,7 @@ Each step is logged to `runs.events`, which the dashboard shows live.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                                   # 14 tests, offline
+pytest -q                                   # offline, mock LLM
 
 # Quick local test without the server
 corella run examples/demo.json --llm mock

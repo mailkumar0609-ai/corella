@@ -61,7 +61,12 @@ export type AgentReport = {
   rounds: { round: number; tested: number; failed: number; focus: string }[];
   root_causes: { cause: string; severity: string; scenario_ids: string[]; fix: string }[];
   patched_prompt: string | null;
-  verification: { retested: number; now_passing: number; still_failing: string[]; fixed: string[] } | null;
+  verification: {
+    retested: number; now_passing: number; still_failing: string[]; fixed: string[];
+    regression_checked?: number; regressed?: string[]; attempts?: number; best_attempt?: number;
+    history?: { attempt: number; fixed: number; still_failing: number; regressed: number }[];
+    conversations_used?: number;
+  } | null;
   stop_reason: string;
 };
 export type Failure = { turn: number; category: string; issue: string; suggested_fix: string };

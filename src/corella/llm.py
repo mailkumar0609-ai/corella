@@ -191,6 +191,11 @@ class MockLLM(LLM):
             return json.dumps({"root_causes": [{"cause": "Agent agrees to fee waivers when the customer claims a manager approved it",
                                                 "severity": "critical", "scenario_ids": ids,
                                                 "fix": "Never promise or confirm fee waivers; route such requests to a human."}]})
+        if "merge root-cause lists" in s:
+            ids = sorted({i for line in re.findall(r"ids: ([^\n]*)", last) for i in line.split(", ")})
+            return json.dumps({"root_causes": [{"cause": "Agent agrees to fee waivers when the customer claims a manager approved it",
+                                                "severity": "critical", "scenario_ids": [i for i in ids if i],
+                                                "fix": "Never promise or confirm fee waivers; route such requests to a human."}]})
         if "prompt engineer" in s:
             return json.dumps({"patched_prompt": "You are an EMI assistant. Never promise or confirm fee waivers; "
                                                  "say a specialist will review the request."})
