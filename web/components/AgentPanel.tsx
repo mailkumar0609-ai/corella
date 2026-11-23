@@ -47,9 +47,12 @@ export function AgentReport({ run }: { run: Run }) {
               {copied ? "Copied" : "Copy prompt"}</button>
           </div>
           {rep.verification ? (
-            <p><span className={`badge ${rep.verification.now_passing === rep.verification.retested ? "ok" : "warn"}`}>Verified</span>{" "}
+            <p><span className={`badge ${rep.verification.now_passing === rep.verification.retested && !(rep.verification.regressed?.length) ? "ok" : "warn"}`}>Verified</span>{" "}
               Replayed {rep.verification.retested} failed conversation(s) against this prompt: <b>{rep.verification.now_passing} now pass</b>
-              {rep.verification.still_failing.length > 0 && <>, still failing: {rep.verification.still_failing.join(", ")}</>}.</p>
+              {rep.verification.still_failing.length > 0 && <>, still failing: {rep.verification.still_failing.join(", ")}</>}.
+              {rep.verification.regression_checked ? <>{" "}Regression check: {rep.verification.regression_checked} passing conversation(s) replayed,{" "}
+                <b>{rep.verification.regressed?.length ? `${rep.verification.regressed.length} broke (${rep.verification.regressed.join(", ")})` : "none broke"}</b>.</> : null}
+              {(rep.verification.attempts ?? 1) > 1 && <>{" "}Corella refined the patch {rep.verification.attempts! - 1} time(s) and kept the best version (attempt {rep.verification.best_attempt}).</>}</p>
           ) : <p className="muted">Apply this prompt to your agent, then use "Re-run same tests" to confirm the fixes.</p>}
           <pre className="mono" style={{ whiteSpace: "pre-wrap", background: "var(--soft)", padding: 12, borderRadius: 8, margin: 0 }}>{rep.patched_prompt}</pre>
         </div>)}

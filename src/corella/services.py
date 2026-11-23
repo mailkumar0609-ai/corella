@@ -132,9 +132,10 @@ def execute_run(db: Session, run: Run, llm=None) -> Run:
             camp = autonomous_campaign(
                 llm, target, desc, agent.rules, budget=int(cfg.get("scenarios", 30)), rounds=cfg.get("rounds", 3),
                 max_turns=cfg.get("max_turns", 6), workers=cfg.get("workers", 4),
-                system_prompt=spec.get("system_prompt"), emit=emit)
+                system_prompt=spec.get("system_prompt"), fix_attempts=int(cfg.get("fix_attempts", 2)), emit=emit)
             results, run.agent_report = camp.results, camp.to_dict()
-            used = len(results) + ((camp.verification or {}).get("retested", 0))
+            v = camp.verification or {}
+            used = len(results) + v.get("conversations_used", v.get("retested", 0))
         else:
             sc = cfg.get("scenarios", 10)
             scenarios = ([eng.Scenario(**s) for s in sc] if isinstance(sc, list)
