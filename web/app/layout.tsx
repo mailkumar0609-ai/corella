@@ -5,10 +5,18 @@ import "./globals.css";
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 const text = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-text", display: "swap" });
 
+const TITLE = "Corella — Testing platform for AI voice & chat agents";
+const DESCRIPTION = "Test your AI agents before your customers do. Corella simulates real conversations, finds failures, and fixes them automatically with a self-improving loop.";
+const OG_IMAGE = { url: "https://corella.live/og-image.png", width: 1200, height: 630,
+  alt: "Corella: Test your AI agents before your customers do. corella.live" };
+
 export const metadata: Metadata = {
-  title: "Corella | Test your AI agent before your customers do",
-  description: "Automated testing for AI chat agents in 13 Indian languages: Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, Gujarati and more.",
+  title: TITLE,
+  description: DESCRIPTION,
   metadataBase: new URL("https://corella.live"),
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "https://corella.live", type: "website",
+    siteName: "Corella", images: [OG_IMAGE] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_IMAGE] },
   applicationName: "Corella",
   appleWebApp: { capable: true, title: "Corella", statusBarStyle: "black-translucent" },
   icons: { icon: "/icon.png", apple: "/apple-touch-icon.png" },
