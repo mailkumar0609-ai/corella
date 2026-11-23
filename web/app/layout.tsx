@@ -8,7 +8,7 @@ const text = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-text", displ
 const TITLE = "Corella — Testing platform for AI voice & chat agents";
 const DESCRIPTION = "Test your AI agents before your customers do. Corella simulates real conversations, finds failures, and fixes them automatically with a self-improving loop.";
 const OG_IMAGE = { url: "https://corella.live/og-image.png", secureUrl: "https://corella.live/og-image.png", type: "image/png", width: 1200, height: 630,
-  alt: "Corella: Test your AI agents before your customers do. corella.live" };
+  alt: "Corella tests AI voice and chat agents with simulated customers in 13 Indian languages, finds failures such as broken RBI rules, and writes the fix. corella.live" };
 
 export const metadata: Metadata = {
   title: TITLE,
